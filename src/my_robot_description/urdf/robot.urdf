@@ -1,0 +1,467 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-1-g15f4949  Build Version: 1.6.7594.29634
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="my_robot_description">
+  <!-- Mount the arm to the world while keeping its joints movable. -->
+  <link name="world" />
+  <joint name="world_to_base" type="fixed">
+    <parent link="world" />
+    <child link="base_link" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </joint>
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="0.00557 0.094758 1.2548E-06"
+        rpy="0 0 0" />
+      <mass
+        value="5.2154" />
+      <inertia
+        ixx="0.026026"
+        ixy="-0.00013987"
+        ixz="2.6039E-05"
+        iyy="0.02172"
+        iyz="-4.7704E-05"
+        izz="0.025295" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://my_robot_description/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://my_robot_description/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="Link1">
+    <inertial>
+      <origin
+        xyz="0.0001345 0.099849 -0.015672"
+        rpy="0 0 0" />
+      <mass
+        value="2.9447" />
+      <inertia
+        ixx="0.011947"
+        ixy="-1.2253E-06"
+        ixz="1.703E-06"
+        iyy="0.0088687"
+        iyz="0.0021793"
+        izz="0.011181" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://my_robot_description/meshes/Link1.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://my_robot_description/meshes/Link1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Joint1"
+    type="revolute">
+    <origin
+      xyz="0 0 0.1901"
+      rpy="1.5708 0 1.5708" />
+    <parent
+      link="base_link" />
+    <child
+      link="Link1" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-3.141592654"
+      upper="3.141592654"
+      effort="100"
+      velocity="1" />
+  </joint>
+  <link
+    name="Link2">
+    <inertial>
+      <origin
+        xyz="0.027625 0.00020193 -0.19499"
+        rpy="0 0 0" />
+      <mass
+        value="6.2406" />
+      <inertia
+        ixx="0.1263"
+        ixy="4.2905E-05"
+        ixz="-0.00019254"
+        iyy="0.11052"
+        iyz="0.00048286"
+        izz="0.027757" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://my_robot_description/meshes/Link2.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://my_robot_description/meshes/Link2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Joint2"
+    type="revolute">
+    <origin
+      xyz="0 0.1399 -0.04"
+      rpy="1.5708 -1.5708 0" />
+    <parent
+      link="Link1" />
+    <child
+      link="Link2" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-1.1345"
+      upper="2.0944"
+      effort="100"
+      velocity="1" />
+  </joint>
+  <link
+    name="Link3">
+    <inertial>
+      <origin
+        xyz="-0.015909 -0.00085391 0.020055"
+        rpy="0 0 0" />
+      <mass
+        value="2.8492" />
+      <inertia
+        ixx="0.0082319"
+        ixy="2.8971E-05"
+        ixz="-0.00090368"
+        iyy="0.0077915"
+        iyz="-3.8653E-05"
+        izz="0.0069342" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://my_robot_description/meshes/Link3.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://my_robot_description/meshes/Link3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Joint3"
+    type="revolute">
+    <origin
+      xyz="0 0 -0.445"
+      rpy="3.1416 0 3.1416" />
+    <parent
+      link="Link2" />
+    <child
+      link="Link3" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-3.14"
+      upper="1.28"
+      effort="100"
+      velocity="1" />
+  </joint>
+  <link
+    name="Link4">
+    <inertial>
+      <origin
+        xyz="0.17427 -0.00015217 -0.00015773"
+        rpy="0 0 0" />
+      <mass
+        value="2.7554" />
+      <inertia
+        ixx="0.0030857"
+        ixy="3.9981E-06"
+        ixz="-0.00031861"
+        iyy="0.010085"
+        iyz="-2.4878E-06"
+        izz="0.010785" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://my_robot_description/meshes/Link4.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://my_robot_description/meshes/Link4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Joint4"
+    type="revolute">
+    <origin
+      xyz="0.0715 0 0.04"
+      rpy="1.5708 0 0" />
+    <parent
+      link="Link3" />
+    <child
+      link="Link4" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="-3.141592654"
+      upper="3.141592654"
+      effort="100"
+      velocity="1" />
+  </joint>
+  <link
+    name="Link5">
+    <inertial>
+      <origin
+        xyz="0.00025391 0.01321 -0.0017485"
+        rpy="0 0 0" />
+      <mass
+        value="0.24589" />
+      <inertia
+        ixx="0.00013953"
+        ixy="-2.1177E-06"
+        ixz="1.9619E-07"
+        iyy="0.00015684"
+        iyz="-1.2921E-06"
+        izz="0.00018562" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://my_robot_description/meshes/Link5.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://my_robot_description/meshes/Link5.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Joint5"
+    type="revolute">
+    <origin
+      xyz="0.3685 0 0"
+      rpy="3.1416 0 1.5708" />
+    <parent
+      link="Link4" />
+    <child
+      link="Link5" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-2.0"
+      upper="2.0"
+      effort="100"
+      velocity="1" />
+  </joint>
+  <link
+    name="Link6">
+    <inertial>
+      <origin
+        xyz="0.0066142 -7.0499E-14 -6.6834E-05"
+        rpy="0 0 0" />
+      <mass
+        value="0.024192" />
+      <inertia
+        ixx="8.9808E-06"
+        ixy="-4.4592E-17"
+        ixz="2.0766E-09"
+        iyy="4.811E-06"
+        iyz="-1.1358E-19"
+        izz="4.8354E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://my_robot_description/meshes/Link6.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://my_robot_description/meshes/Link6.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Joint6"
+    type="revolute">
+    <origin
+      xyz="0 0.0675 0"
+      rpy="0 0 1.5708" />
+    <parent
+      link="Link5" />
+    <child
+      link="Link6" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="-3.141592654"
+      upper="3.141592654"
+      effort="100"
+      velocity="1" />
+  </joint>
+  <gazebo>
+    <plugin filename="gz-sim-joint-position-controller-system"
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>Joint1</joint_name>
+      <p_gain>80</p_gain>
+      <i_gain>0</i_gain>
+      <d_gain>15</d_gain>
+      <cmd_max>100</cmd_max>
+      <cmd_min>-100</cmd_min>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system"
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>Joint2</joint_name>
+      <p_gain>120</p_gain>
+      <i_gain>0</i_gain>
+      <d_gain>12</d_gain>
+      <cmd_max>100</cmd_max>
+      <cmd_min>-100</cmd_min>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system"
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>Joint3</joint_name>
+      <p_gain>100</p_gain>
+      <i_gain>0</i_gain>
+      <d_gain>10</d_gain>
+      <cmd_max>100</cmd_max>
+      <cmd_min>-100</cmd_min>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system"
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>Joint4</joint_name>
+      <p_gain>40</p_gain>
+      <i_gain>0</i_gain>
+      <d_gain>1</d_gain>
+      <cmd_max>40</cmd_max>
+      <cmd_min>-40</cmd_min>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system"
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>Joint5</joint_name>
+      <p_gain>30</p_gain>
+      <i_gain>0</i_gain>
+      <d_gain>0.5</d_gain>
+      <cmd_max>20</cmd_max>
+      <cmd_min>-20</cmd_min>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system"
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>Joint6</joint_name>
+      <p_gain>15</p_gain>
+      <i_gain>0</i_gain>
+      <d_gain>0.2</d_gain>
+      <cmd_max>10</cmd_max>
+      <cmd_min>-10</cmd_min>
+    </plugin>
+    <plugin filename="gz-sim-joint-state-publisher-system"
+            name="gz::sim::systems::JointStatePublisher">
+      <joint_name>Joint1</joint_name>
+      <joint_name>Joint2</joint_name>
+      <joint_name>Joint3</joint_name>
+      <joint_name>Joint4</joint_name>
+      <joint_name>Joint5</joint_name>
+      <joint_name>Joint6</joint_name>
+    </plugin>
+  </gazebo>
+</robot>

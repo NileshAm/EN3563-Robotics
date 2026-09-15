@@ -1,0 +1,121 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <world name="workcell">
+    <gravity>0 0 -9.81</gravity>
+    <physics name="default_physics" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1</real_time_factor>
+    </physics>
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <scene>
+      <ambient>0.4 0.4 0.4 1</ambient>
+      <background>0.75 0.8 0.85 1</background>
+      <shadows>true</shadows>
+    </scene>
+    <light name="sun" type="directional">
+      <pose>0 0 8 0 0 0</pose>
+      <cast_shadows>true</cast_shadows>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.5 0.2 -1</direction>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+    </light>
+
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><plane><normal>0 0 1</normal><size>10 10</size></plane></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><plane><normal>0 0 1</normal><size>10 10</size></plane></geometry>
+          <material><ambient>0.55 0.58 0.6 1</ambient><diffuse>0.55 0.58 0.6 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Include the existing URDF at startup so Reset All restores it too. -->
+    <include>
+      <uri>model://my_robot_description/urdf/robot.urdf</uri>
+      <name>my_robot</name>
+      <pose>0 0 0 0 0 3.141592654</pose>
+    </include>
+
+    <!-- Low worktable: top surface is z=0.30 m. -->
+    <model name="worktable">
+      <static>true</static>
+      <pose>0.65 0 0 0 0 0</pose>
+      <link name="link">
+        <collision name="top_collision">
+          <pose>0 0 0.275 0 0 0</pose>
+          <geometry><box><size>0.5 0.9 0.05</size></box></geometry>
+        </collision>
+        <visual name="top_visual">
+          <pose>0 0 0.275 0 0 0</pose>
+          <geometry><box><size>0.5 0.9 0.05</size></box></geometry>
+          <material><ambient>0.55 0.35 0.18 1</ambient><diffuse>0.55 0.35 0.18 1</diffuse></material>
+        </visual>
+        <collision name="support_collision">
+          <pose>0 0 0.125 0 0 0</pose>
+          <geometry><box><size>0.3 0.65 0.25</size></box></geometry>
+        </collision>
+        <visual name="support_visual">
+          <pose>0 0 0.125 0 0 0</pose>
+          <geometry><box><size>0.3 0.65 0.25</size></box></geometry>
+          <material><ambient>0.18 0.2 0.23 1</ambient><diffuse>0.18 0.2 0.23 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- These model poses are the reset targets. Units: metres and radians. -->
+    <model name="red_cube">
+      <pose>0.6 -0.25 0.34 0 0 0</pose>
+      <link name="link">
+        <inertial>
+          <mass>0.1</mass>
+          <inertia><ixx>0.0001066667</ixx><iyy>0.0001066667</iyy><izz>0.0001066667</izz></inertia>
+        </inertial>
+        <collision name="collision"><geometry><box><size>0.08 0.08 0.08</size></box></geometry></collision>
+        <visual name="visual">
+          <geometry><box><size>0.08 0.08 0.08</size></box></geometry>
+          <material><ambient>0.85 0.08 0.06 1</ambient><diffuse>0.85 0.08 0.06 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="green_cylinder">
+      <pose>0.6 0 0.36 0 0 0</pose>
+      <link name="link">
+        <inertial>
+          <mass>0.15</mass>
+          <inertia><ixx>0.00027375</ixx><iyy>0.00027375</iyy><izz>0.0001875</izz></inertia>
+        </inertial>
+        <collision name="collision"><geometry><cylinder><radius>0.05</radius><length>0.12</length></cylinder></geometry></collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.05</radius><length>0.12</length></cylinder></geometry>
+          <material><ambient>0.08 0.65 0.18 1</ambient><diffuse>0.08 0.65 0.18 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="blue_sphere">
+      <pose>0.6 0.25 0.35 0 0 0</pose>
+      <link name="link">
+        <inertial>
+          <mass>0.1</mass>
+          <inertia><ixx>0.0001</ixx><iyy>0.0001</iyy><izz>0.0001</izz></inertia>
+        </inertial>
+        <collision name="collision"><geometry><sphere><radius>0.05</radius></sphere></geometry></collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.05</radius></sphere></geometry>
+          <material><ambient>0.06 0.2 0.85 1</ambient><diffuse>0.06 0.2 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+  </world>
+</sdf>

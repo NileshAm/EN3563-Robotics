@@ -1,0 +1,65 @@
+# ROS 2 / colcon generated output
+/build/
+/install/
+/log/
+
+# Python bytecode and tool caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Native/CMake build artifacts outside the colcon build directory
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+Makefile
+compile_commands.json
+*.o
+*.obj
+*.so
+*.a
+
+# Logs, runtime data, and crash dumps
+*.log
+*.pid
+*.seed
+*.stackdump
+core
+core.*
+
+# Temporary and backup files
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+*.swp
+*.swo
+*~
+
+# IDE/editor metadata (keep shared VS Code settings)
+.idea/
+.vscode/*
+!.vscode/settings.json
+*.code-workspace
+
+# Operating-system metadata
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+
+# Local environments and secrets
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+env/
