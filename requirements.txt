@@ -1,0 +1,13 @@
+# Python/PyPI development dependencies for the `ros` Conda environment.
+# Install with: conda activate ros && python -m pip install -r requirements.txt
+#
+# ROS modules are not distributed through PyPI and therefore cannot be listed
+# as pip requirements here. For VS Code autocomplete, install their RoboStack
+# packages as documented in README.md:
+#   ros-jazzy-rclpy, ros-jazzy-std-msgs, ros-jazzy-sensor-msgs,
+#   ros-jazzy-geometry-msgs, ros-jazzy-ament-index-python,
+#   ros-jazzy-launch, and ros-jazzy-launch-ros.
+setuptools>=68
+pytest>=7
+flake8>=6
+pydocstyle>=6

@@ -1,10 +1,11 @@
-# Default workcell
+# Gazebo workcell
 
 `workcell.sdf` is the default world for `gazebo.launch.py`. It contains the
 existing robot, a ground plane, a fixed low worktable, and three movable objects.
 All assets are local; no Fuel downloads are required.
 
-Launch from the workspace after building:
+Launch it from the workspace after installing dependencies and building (see the
+[workspace README](../../../README.md)):
 
 ```bash
 source /opt/ros/jazzy/setup.bash
@@ -12,7 +13,8 @@ source install/setup.bash
 ros2 launch my_robot_description gazebo.launch.py
 ```
 
-The world starts paused. Press Play to advance physics.
+The launch file passes `-r` to Gazebo, so physics starts running immediately.
+Use Gazebo's play/pause control to change the simulation state.
 
 ## Reset to the saved poses
 
@@ -36,7 +38,7 @@ Positions are in metres and angles are in radians. The table surface is at
 
 | Model | Initial position (x, y, z) |
 | --- | --- |
-| my_robot | 0, 0, 0 |
+| my_robot | 0, 0, 0 (yaw: pi) |
 | worktable | 0.65, 0, 0 |
 | red_cube | 0.60, -0.25, 0.34 |
 | green_cylinder | 0.60, 0, 0.36 |
@@ -44,3 +46,15 @@ Positions are in metres and angles are in radians. The table surface is at
 
 After editing, run `colcon build --packages-select my_robot_description` and
 restart the launch. Moving objects in the GUI does not change the saved file.
+
+## ROS 2 interfaces
+
+The bridge configuration exposes these simulation interfaces:
+
+- `/robot/joint1/command` through `/robot/joint6/command`
+  (`std_msgs/msg/Float64`) send joint position targets to Gazebo.
+- `/joint_states` (`sensor_msgs/msg/JointState`) reports the simulated joints.
+- `/clock` (`rosgraph_msgs/msg/Clock`) provides simulation time.
+
+The robot model is included directly by `workcell.sdf`; do not spawn another
+copy when using `gazebo.launch.py`.

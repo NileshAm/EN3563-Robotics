@@ -1,5 +1,10 @@
 {
     "cmake.sourceDirectory": "/home/nilesh/projects/robot_prod/src/my_robot_description",
     "python-envs.defaultEnvManager": "ms-python.python:conda",
-    "python-envs.defaultPackageManager": "ms-python.python:conda"
+    "python-envs.defaultPackageManager": "ms-python.python:conda",
+    "python.defaultInterpreterPath": "/home/nilesh/miniconda3/envs/ros/bin/python",
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/src/robot_motion"
+    ],
+    "python.terminal.activateEnvironment": true
 }
