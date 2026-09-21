@@ -1,3 +1,5 @@
+"""Shared joint and Cartesian trajectory generation."""
+
 from numpy import (
     array,
     arange,

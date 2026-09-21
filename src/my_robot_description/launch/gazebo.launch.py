@@ -84,6 +84,14 @@ def generate_launch_description():
             output='screen',
         ),
 
+        # Observe measured Gazebo feedback using the shared kinematics.
+        Node(
+            package='monitor',
+            executable='joint_monitor',
+            parameters=[{'use_sim_time': True}],
+            output='screen',
+        ),
+
         # RViz follows /tf generated from Gazebo's bridged /joint_states.
         Node(
             package='rviz2',

@@ -3,15 +3,16 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Float64
 from visualization_msgs.msg import Marker
-from .velocityProfile import s_curve
-from .Homogenous import generateH, IK, H06, joint_to_cartesian_motion
-from numpy import zeros, deg2rad
+from robot_kinematics import s_curve, generateH, IK, H06, joint_to_cartesian_motion
+from robot_kinematics.conventions import convention_from_node
+from numpy import zeros
 import matplotlib.pyplot as plt
 from .plotter import plot_velocity_and_acceleration
 
 class TurnNode(Node):
     def __init__(self):
         super().__init__("turn_node")
+        self.joint_convention = convention_from_node(self)
 
         self.joints = {}
 
@@ -29,7 +30,7 @@ class TurnNode(Node):
             marker_qos,
         )
 
-        target_position_mm = [547.497705,0,815.002259] 
+        target_position_mm = [0,0,1000] 
         self.target_marker = Marker()
         # H06/IK coordinates are expressed in the workcell world frame.
         self.target_marker.header.frame_id = "world"
@@ -60,8 +61,11 @@ class TurnNode(Node):
             [[1,0,0], [0, 1, 0], [0, 0, 1]],
             target_position_mm,
         )
-        ik = IK(end, zeros(6,))[0]
-        curve = s_curve(zeros((6,)), ik, 30, 30, True, move_linear=True)
+        start_angles = self.joint_convention.ros_to_model(zeros(6))
+        ik, converged = IK(end, start_angles)
+        if not converged:
+            raise RuntimeError("Target inverse kinematics did not converge")
+        curve = s_curve(start_angles, ik, 60, 60, True, move_linear=True)
 
         self.joint_pos = []
         self.velocity = []
@@ -77,7 +81,7 @@ class TurnNode(Node):
             )
 
             self.position.append(H06(*joint_position)[:3, 3])
-            self.joint_pos.append(deg2rad(joint_position))
+            self.joint_pos.append(self.joint_convention.model_to_ros(joint_position))
             self.velocity.append(xyz_velocity)
             self.acc.append(xyz_acceleration)
         plot_velocity_and_acceleration(self.position, self.velocity, self.acc)

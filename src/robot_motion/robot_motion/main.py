@@ -1,15 +1,15 @@
 from numpy import array, linalg, average, zeros
-from utils import splitH, getTraslation, extendTranslation, IdetityMat
-from Homogenous import (
+from robot_kinematics.utils import splitH, getTraslation, extendTranslation, IdetityMat
+from robot_kinematics.Homogenous import (
     H06,
     IK,
     generateH,
     pose_error,
     joint_to_cartesian_motion,
 )
-from velocityProfile import s_curve
+from robot_kinematics import s_curve
 import pandas as pd
-from plotter import plot_velocity_and_acceleration
+from robot_motion.plotter import plot_velocity_and_acceleration
 import matplotlib.pyplot  as plt
 
 # actualAngles = array([20, 30, 50, 80, 70, 90], dtype=float)

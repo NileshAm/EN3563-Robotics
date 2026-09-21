@@ -28,4 +28,9 @@ def generate_launch_description():
             arguments=['-d', str(rviz_config)],
             output='screen',
         ),
+        Node(
+            package='monitor',
+            executable='joint_monitor',
+            output='screen',
+        ),
     ])

@@ -1,3 +1,5 @@
+"""Shared homogeneous transform utilities."""
+
 from numpy import cos, sin, deg2rad, array, concatenate, reshape,zeros
 
 def cosd(degree):

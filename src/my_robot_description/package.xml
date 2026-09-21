@@ -30,4 +30,5 @@
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>rosgraph_msgs</exec_depend>
   <exec_depend>robot_motion</exec_depend>
+  <exec_depend>monitor</exec_depend>
 </package>

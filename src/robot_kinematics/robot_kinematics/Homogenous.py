@@ -1,3 +1,5 @@
+"""Shared GP7 forward/inverse kinematics: degrees, millimetres, world frame."""
+
 from .utils import generateH
 from numpy import array, linalg, zeros, eye, max as maxnp, abs as absnp, concatenate, isfinite
 from scipy.spatial.transform import Rotation

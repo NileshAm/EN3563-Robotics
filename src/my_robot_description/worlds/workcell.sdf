@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <sdf version="1.9">
   <world name="workcell">
-    <gravity>0 0 -9.81</gravity>
+    <gravity>0 0 0</gravity>
     <physics name="default_physics" type="ignored">
       <max_step_size>0.001</max_step_size>
       <real_time_factor>1</real_time_factor>
@@ -50,7 +50,7 @@
     </include>
 
     <!-- Low worktable: top surface is z=0.30 m. -->
-    <model name="worktable">
+    <!-- <model name="worktable">
       <static>true</static>
       <pose>0.65 0 0 0 0 0</pose>
       <link name="link">
@@ -117,6 +117,6 @@
           <material><ambient>0.06 0.2 0.85 1</ambient><diffuse>0.06 0.2 0.85 1</diffuse></material>
         </visual>
       </link>
-    </model>
+    </model> -->
   </world>
 </sdf>

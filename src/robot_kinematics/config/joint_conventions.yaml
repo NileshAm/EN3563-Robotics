@@ -1,0 +1,6 @@
+# Ordered Joint1 ... Joint6. Applied by both motion and monitor at startup.
+# q_model_deg = direction * rad2deg(q_ros_rad) + offset_deg
+# These defaults match the current URDF; do not flip signs just to move a target.
+joint_names: [Joint1, Joint2, Joint3, Joint4, Joint5, Joint6]
+joint_directions: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+joint_offsets_deg: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]

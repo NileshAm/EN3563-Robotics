@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'joint_monitor = monitor.joint_monitor:main',
         ],
     },
 )
