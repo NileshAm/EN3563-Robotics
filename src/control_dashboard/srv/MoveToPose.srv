@@ -1,0 +1,7 @@
+# Desired world -> Link6 pose. Position: metres. Orientation: quaternion xyzw.
+geometry_msgs/Pose target
+bool move_linear
+---
+# Acceptance after planning, not physical completion. See /robot/move_progress.
+bool accepted
+string message

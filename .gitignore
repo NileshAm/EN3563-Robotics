@@ -1,7 +1,7 @@
 # ROS 2 / colcon generated output
-/build/
-/install/
-/log/
+build/
+install/
+log/
 
 # Python bytecode and tool caches
 __pycache__/
