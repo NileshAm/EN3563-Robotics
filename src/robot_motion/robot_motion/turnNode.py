@@ -119,6 +119,15 @@ class TurnNode(Node):
             response.message = str(error)
             self.report('failed', 0.0, response.message)
             return response
+        except Exception as error:
+            # A malformed or numerically difficult request must fail only the
+            # service call, not terminate the long-running ROS node.
+            response.message = (
+                f'Unexpected planning error: {type(error).__name__}: {error}'
+            )
+            self.get_logger().error(response.message)
+            self.report('failed', 0.0, response.message)
+            return response
 
         self.target = end
         self.target_marker.pose = request.target
@@ -138,6 +147,11 @@ class TurnNode(Node):
         ik, converged = IK(end, start_angles)
         if not converged:
             raise RuntimeError("Target inverse kinematics did not converge")
+        target_position = self.joint_convention.model_to_ros(ik)
+        if (not isfinite(target_position).all()
+                or (target_position < self.joint_limits[:, 0]).any()
+                or (target_position > self.joint_limits[:, 1]).any()):
+            raise ValueError('Target inverse kinematics exceeds URDF joint limits')
         curve = s_curve(start_angles, ik, 60, 60, True, move_linear=move_linear)
 
         self.joint_pos = []

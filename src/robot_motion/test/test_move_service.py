@@ -13,7 +13,7 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import String
 
 from control_dashboard.srv import MoveToPose
-from robot_kinematics import H06
+from robot_kinematics import generateH, H06
 from robot_motion.turnNode import TurnNode
 
 
@@ -131,3 +131,32 @@ def test_lost_feedback_and_settling_timeout_report_failure(robot):
     node.settle_started = time.monotonic() - 11
     node.timer_callback()
     assert not node.active and 'Timed out' in events[-1][2]
+
+
+def test_orientation_only_movel_plans_through_wrist_singularity(robot):
+    node, _, _, events = robot
+    start = np.zeros(6)
+    prepare(node, start)
+    start_transform = H06(*start)
+    target = generateH(
+        Rotation.from_euler('xyz', [-90.0, 0.0, 10.0], degrees=True).as_matrix(),
+        start_transform[:3, 3],
+    )
+    request = MoveToPose.Request()
+    request.target.position.x, request.target.position.y, request.target.position.z = (
+        target[:3, 3] / 1000.0
+    )
+    (
+        request.target.orientation.x,
+        request.target.orientation.y,
+        request.target.orientation.z,
+        request.target.orientation.w,
+    ) = Rotation.from_matrix(target[:3, :3]).as_quat()
+    request.move_linear = True
+
+    response = node.move_to_pose(request, MoveToPose.Response())
+
+    assert response.accepted
+    assert node.active
+    assert node.joint_posLen > 1
+    assert events[-1][0] == 'moving'

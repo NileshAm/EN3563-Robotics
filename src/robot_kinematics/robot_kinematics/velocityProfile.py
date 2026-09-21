@@ -135,7 +135,15 @@ def _move_l_curve(start, end, T, dt=0.01):
                 relative_rotation_vector * s
             ).as_matrix()
 
-            joint_angles, converged = IK(target, previous_angles)
+            # Cartesian orientation changes can pass close to a wrist
+            # singularity.  The endpoint solve is usually quick, but the
+            # small intermediate rotations need more iterations to leave the
+            # singular configuration while preserving the tool position.
+            joint_angles, converged = IK(
+                target,
+                previous_angles,
+                max_iterations=1000,
+            )
             if not converged:
                 raise RuntimeError(
                     "MoveL inverse kinematics failed at "
