@@ -75,6 +75,15 @@ def generate_launch_description():
             output='screen',
         ),
 
+        # Publish the target marker and the planned joint commands.
+        Node(
+            package='robot_motion',
+            executable='turnNode',
+            name='turn_node',
+            parameters=[{'use_sim_time': True}],
+            output='screen',
+        ),
+
         # RViz follows /tf generated from Gazebo's bridged /joint_states.
         Node(
             package='rviz2',

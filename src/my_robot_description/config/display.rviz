@@ -32,10 +32,20 @@ Visualization Manager:
       Update Interval: 0
       Links:
         All Links Enabled: true
+    - Class: rviz_default_plugins/Marker
+      Name: Target Point
+      Enabled: true
+      Value: true
+      Topic:
+        Value: /vis/point
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
-    Fixed Frame: base_link
+    Fixed Frame: world
     Frame Rate: 30
   Name: root
   Tools:

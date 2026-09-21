@@ -45,7 +45,8 @@
     <include>
       <uri>model://my_robot_description/urdf/robot.urdf</uri>
       <name>my_robot</name>
-      <pose>0 0 0 0 0 3.141592654</pose>
+      <!-- world_to_base in the URDF defines the robot's workcell mounting. -->
+      <pose>0 0 0 0 0 0</pose>
     </include>
 
     <!-- Low worktable: top surface is z=0.30 m. -->

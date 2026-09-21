@@ -9,7 +9,8 @@
   <joint name="world_to_base" type="fixed">
     <parent link="world" />
     <child link="base_link" />
-    <origin xyz="0 0 0" rpy="0 0 0" />
+    <!-- The exported robot base faces -X. Mount it facing the workcell's +X. -->
+    <origin xyz="0 0 0" rpy="0 0 3.141592654" />
   </joint>
   <link
     name="base_link">
@@ -336,8 +337,8 @@
     <axis
       xyz="0 0 1" />
     <limit
-      lower="-2.0"
-      upper="2.0"
+      lower="-2.35619449"
+      upper="2.35619449"
       effort="100"
       velocity="1" />
   </joint>
