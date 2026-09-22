@@ -146,12 +146,16 @@ class TurnNode(Node):
         start_angles = self.joint_convention.ros_to_model(self.current_angles)
         ik, converged = IK(end, start_angles)
         if not converged:
-            raise RuntimeError("Target inverse kinematics did not converge")
+            raise RuntimeError(
+                'Target pose is not reachable: inverse kinematics did not converge'
+            )
         target_position = self.joint_convention.model_to_ros(ik)
         if (not isfinite(target_position).all()
                 or (target_position < self.joint_limits[:, 0]).any()
                 or (target_position > self.joint_limits[:, 1]).any()):
-            raise ValueError('Target inverse kinematics exceeds URDF joint limits')
+            raise ValueError(
+                'Target pose is not reachable within the robot joint limits'
+            )
         curve = s_curve(start_angles, ik, 60, 60, True, move_linear=move_linear)
 
         self.joint_pos = []

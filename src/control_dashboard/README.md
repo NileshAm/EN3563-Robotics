@@ -32,6 +32,8 @@ position in metres and orientation as a quaternion. MoveL plans a straight
 Cartesian path; unchecking it uses the existing joint-space trajectory generator.
 The initial GUI values approximate the URDF's zero-joint pose. Positive rotations
 and conventions are those already configured in `robot_kinematics`.
+The **Home** button restores those home coordinates and requests a joint-space
+move, regardless of the MoveL checkbox state.
 
 `turnNode` uses measured `/joint_states` as the starting angles and reads limits
 from `/robot_description`. It rejects missing/stale feedback, invalid targets,

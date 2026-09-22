@@ -146,7 +146,8 @@ def _move_l_curve(start, end, T, dt=0.01):
             )
             if not converged:
                 raise RuntimeError(
-                    "MoveL inverse kinematics failed at "
+                    "Target pose is reachable, but the straight-line path "
+                    "is not reachable: inverse kinematics failed at "
                     f"t={times[index]:.4f} s (path fraction {s:.4f})"
                 )
 

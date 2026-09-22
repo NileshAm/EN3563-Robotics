@@ -117,6 +117,20 @@ def test_rejects_missing_feedback_bad_pose_and_limits(robot):
     assert not node.active and events[-1][0] == 'failed'
 
 
+def test_reports_unreachable_target_to_dashboard(robot):
+    node, _, _, events = robot
+    prepare(node, [0]*6)
+    request = request_for([0]*6)
+    request.target.position.x = 10.0
+
+    response = node.move_to_pose(request, MoveToPose.Response())
+
+    assert not response.accepted
+    assert 'not reachable' in response.message
+    assert events[-1][0] == 'failed'
+    assert events[-1][2] == response.message
+
+
 def test_lost_feedback_and_settling_timeout_report_failure(robot):
     node, _, _, events = robot
     prepare(node, [0]*6)
