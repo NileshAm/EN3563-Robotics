@@ -401,39 +401,49 @@
       velocity="1" />
   </joint>
   <gazebo>
+    <!-- Joint-space position PIDs. Integral action rejects gravity torque;
+         i_min/i_max prevent windup when an effort limit is reached. -->
     <plugin filename="gz-sim-joint-position-controller-system"
             name="gz::sim::systems::JointPositionController">
       <joint_name>Joint1</joint_name>
-      <p_gain>80</p_gain>
-      <i_gain>0</i_gain>
+      <p_gain>200</p_gain>
+      <i_gain>10</i_gain>
       <d_gain>15</d_gain>
+      <i_max>20</i_max>
+      <i_min>-20</i_min>
       <cmd_max>100</cmd_max>
       <cmd_min>-100</cmd_min>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system"
             name="gz::sim::systems::JointPositionController">
       <joint_name>Joint2</joint_name>
-      <p_gain>120</p_gain>
-      <i_gain>0</i_gain>
-      <d_gain>12</d_gain>
+      <p_gain>1000</p_gain>
+      <i_gain>300</i_gain>
+      <d_gain>50</d_gain>
+      <i_max>100</i_max>
+      <i_min>-100</i_min>
       <cmd_max>100</cmd_max>
       <cmd_min>-100</cmd_min>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system"
             name="gz::sim::systems::JointPositionController">
       <joint_name>Joint3</joint_name>
-      <p_gain>100</p_gain>
-      <i_gain>0</i_gain>
-      <d_gain>10</d_gain>
+      <p_gain>300</p_gain>
+      <i_gain>100</i_gain>
+      <d_gain>15</d_gain>
+      <i_max>100</i_max>
+      <i_min>-100</i_min>
       <cmd_max>100</cmd_max>
       <cmd_min>-100</cmd_min>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system"
             name="gz::sim::systems::JointPositionController">
       <joint_name>Joint4</joint_name>
-      <p_gain>40</p_gain>
-      <i_gain>0</i_gain>
+      <p_gain>80</p_gain>
+      <i_gain>10</i_gain>
       <d_gain>1</d_gain>
+      <i_max>20</i_max>
+      <i_min>-20</i_min>
       <cmd_max>40</cmd_max>
       <cmd_min>-40</cmd_min>
     </plugin>
@@ -441,19 +451,23 @@
             name="gz::sim::systems::JointPositionController">
       <joint_name>Joint5</joint_name>
       <p_gain>30</p_gain>
-      <i_gain>0</i_gain>
-      <d_gain>0.5</d_gain>
+      <i_gain>2</i_gain>
+      <d_gain>0.15</d_gain>
+      <i_max>10</i_max>
+      <i_min>-10</i_min>
       <cmd_max>20</cmd_max>
       <cmd_min>-20</cmd_min>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system"
             name="gz::sim::systems::JointPositionController">
       <joint_name>Joint6</joint_name>
-      <p_gain>15</p_gain>
-      <i_gain>0</i_gain>
-      <d_gain>0.2</d_gain>
-      <cmd_max>10</cmd_max>
-      <cmd_min>-10</cmd_min>
+      <p_gain>10</p_gain>
+      <i_gain>0.1</i_gain>
+      <d_gain>0.02</d_gain>
+      <i_max>2</i_max>
+      <i_min>-2</i_min>
+      <cmd_max>1</cmd_max>
+      <cmd_min>-1</cmd_min>
     </plugin>
     <plugin filename="gz-sim-joint-state-publisher-system"
             name="gz::sim::systems::JointStatePublisher">
