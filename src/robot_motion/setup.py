@@ -24,7 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            "turnNode = robot_motion.turnNode:main"
+            "turnNode = robot_motion.turnNode:main",
+            "pick_place = robot_motion.pick_place:main"
         ],
     },
 )

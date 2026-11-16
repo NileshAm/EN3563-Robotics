@@ -34,4 +34,11 @@ install(
     share/${PROJECT_NAME}
 )
 
+find_package(gz_sim_vendor REQUIRED)
+find_package(gz-sim8 REQUIRED)
+add_library(workcell_gripper SHARED plugins/gripper.cpp)
+target_link_libraries(workcell_gripper PRIVATE gz-sim8::gz-sim8)
+target_compile_features(workcell_gripper PRIVATE cxx_std_17)
+install(TARGETS workcell_gripper LIBRARY DESTINATION lib)
+ament_environment_hooks("${CMAKE_CURRENT_SOURCE_DIR}/hooks/gripper.dsv.in")
 ament_package()

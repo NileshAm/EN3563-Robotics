@@ -400,7 +400,53 @@
       effort="100"
       velocity="1" />
   </joint>
+  <!-- Parallel jaws: 90 mm open gap, 50 mm cube; local +X points down. -->
+  <material name="gripper_blue"><color rgba="0.08 0.25 0.55 1"/></material>
+  <material name="gripper_metal"><color rgba="0.65 0.7 0.76 1"/></material>
+  <material name="gripper_rubber"><color rgba="0.045 0.045 0.05 1"/></material>
+  <link name="gripper_body">
+    <inertial><origin xyz="0.055 0 0"/><mass value="0.12"/>
+      <inertia ixx="0.00016" ixy="0" ixz="0" iyy="0.00010" iyz="0" izz="0.00022"/>
+    </inertial>
+    <visual><origin xyz="0.015 0 0" rpy="0 1.57079632679 0"/>
+      <geometry><cylinder radius="0.027" length="0.03"/></geometry><material name="gripper_metal"/></visual>
+    <visual><origin xyz="0.063 0 0"/><geometry><box size="0.076 0.12 0.045"/></geometry><material name="gripper_blue"/></visual>
+    <collision><origin xyz="0.063 0 0"/><geometry><box size="0.076 0.12 0.045"/></geometry></collision>
+  </link>
+  <joint name="flange_to_gripper" type="fixed"><parent link="Link6"/><child link="gripper_body"/></joint>
+  <link name="left_finger">
+    <inertial><origin xyz="0.132 0 0"/><mass value="0.025"/>
+      <inertia ixx="0.000002" ixy="0" ixz="0" iyy="0.000008" iyz="0" izz="0.000008"/>
+    </inertial>
+    <visual><origin xyz="0.132 0 0"/><geometry><box size="0.062 0.01 0.026"/></geometry><material name="gripper_metal"/></visual>
+    <collision><origin xyz="0.132 0 0"/><geometry><box size="0.062 0.01 0.026"/></geometry></collision>
+    <visual><origin xyz="0.144 -0.0055 0"/><geometry><box size="0.034 0.001 0.028"/></geometry><material name="gripper_rubber"/></visual>
+  </link>
+  <joint name="left_finger_joint" type="prismatic">
+    <parent link="gripper_body"/><child link="left_finger"/>
+    <origin xyz="0 0.05 0"/><axis xyz="0 -1 0"/>
+    <limit lower="0" upper="0.022" effort="5" velocity="0.04"/>
+    <dynamics damping="1" friction="0.05"/>
+  </joint>
+  <link name="right_finger">
+    <inertial><origin xyz="0.132 0 0"/><mass value="0.025"/>
+      <inertia ixx="0.000002" ixy="0" ixz="0" iyy="0.000008" iyz="0" izz="0.000008"/>
+    </inertial>
+    <visual><origin xyz="0.132 0 0"/><geometry><box size="0.062 0.01 0.026"/></geometry><material name="gripper_metal"/></visual>
+    <collision><origin xyz="0.132 0 0"/><geometry><box size="0.062 0.01 0.026"/></geometry></collision>
+    <visual><origin xyz="0.144 0.0055 0"/><geometry><box size="0.034 0.001 0.028"/></geometry><material name="gripper_rubber"/></visual>
+  </link>
+  <joint name="right_finger_joint" type="prismatic">
+    <parent link="gripper_body"/><child link="right_finger"/>
+    <origin xyz="0 -0.05 0"/><axis xyz="0 1 0"/>
+    <limit lower="0" upper="0.022" effort="5" velocity="0.04"/>
+    <dynamics damping="1" friction="0.05"/>
+  </joint>
+  <link name="tool_tip"/>
+  <joint name="gripper_to_tip" type="fixed"><parent link="gripper_body"/><child link="tool_tip"/><origin xyz="0.12 0 0"/></joint>
   <gazebo>
+    <plugin filename="libworkcell_gripper.so" name="workcell::Gripper"/>
+
     <!-- Joint-space position PIDs. Integral action rejects gravity torque;
          i_min/i_max prevent windup when an effort limit is reached. -->
     <plugin filename="gz-sim-joint-position-controller-system"
@@ -477,6 +523,8 @@
       <joint_name>Joint4</joint_name>
       <joint_name>Joint5</joint_name>
       <joint_name>Joint6</joint_name>
+      <joint_name>left_finger_joint</joint_name>
+      <joint_name>right_finger_joint</joint_name>
     </plugin>
   </gazebo>
 </robot>

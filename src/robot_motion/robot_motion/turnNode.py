@@ -156,7 +156,7 @@ class TurnNode(Node):
             raise ValueError(
                 'Target pose is not reachable within the robot joint limits'
             )
-        curve = s_curve(start_angles, ik, 60, 60, True, move_linear=move_linear)
+        curve = s_curve(start_angles, ik, 45, 45, True, move_linear=move_linear)
 
         self.joint_pos = []
         self.velocity = []

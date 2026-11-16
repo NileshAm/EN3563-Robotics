@@ -32,6 +32,15 @@ Visualization Manager:
       Update Interval: 0
       Links:
         All Links Enabled: true
+    - Class: rviz_default_plugins/TF
+      Name: Link Coordinate Frames
+      Enabled: true
+      Show Names: true
+      Show Axes: true
+      Show Arrows: false
+      Marker Scale: 0.25
+      Frames:
+        All Enabled: true
     - Class: rviz_default_plugins/Marker
       Name: Target Point
       Enabled: true

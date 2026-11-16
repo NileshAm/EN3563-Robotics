@@ -55,7 +55,28 @@ def s_curve(
     print(f"Max velocity : {round(v_max, 3)} deg/s")
     print(f"Max acceleration : {round(a_max, 3)} deg/s^2")
     print(f"Movement time : {round(T, 3)} s")
-    return _s_curve(start, end, T, dt, move_linear)
+    curve = _s_curve(start, end, T, dt, move_linear)
+    if move_linear and len(curve) > 2:
+        # Cartesian IK can demand higher joint rates than endpoint displacement
+        # predicts. Stretch the whole path, retaining its constant orientation.
+        import numpy as np
+        velocities = np.array([state['velocity'] for state in curve])
+        accelerations = np.array([state['acceleration'] for state in curve])
+        scale = float(np.maximum(1.0, np.maximum(
+            np.max(np.abs(velocities) / v_max),
+            np.sqrt(np.max(np.abs(accelerations) / a_max)))))
+        if scale > 1.0:
+            times = np.array([state['time'] for state in curve]) * scale
+            positions = np.array([state['position'] for state in curve])
+            new_times = np.arange(0.0, times[-1], dt)
+            new_times = np.append(new_times, times[-1])
+            positions = np.column_stack([
+                np.interp(new_times, times, positions[:, j]) for j in range(6)])
+            velocities = np.gradient(positions, new_times, axis=0)
+            accelerations = np.gradient(velocities, new_times, axis=0)
+            curve = [dict(time=t, position=p, velocity=v, acceleration=a)
+                     for t, p, v, a in zip(new_times, positions, velocities, accelerations)]
+    return curve
 
 
 def _s_curve(start, end, T, dt=0.01, move_linear=False):

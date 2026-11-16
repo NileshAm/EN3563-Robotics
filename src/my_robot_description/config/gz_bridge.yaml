@@ -46,3 +46,21 @@
   gz_type_name: gz.msgs.Clock
   direction: GZ_TO_ROS
   qos_profile: CLOCK
+
+- ros_topic_name: /gripper/close
+  gz_topic_name: /gripper/close
+  ros_type_name: std_msgs/msg/Bool
+  gz_type_name: gz.msgs.Boolean
+  direction: ROS_TO_GZ
+
+- ros_topic_name: /gripper/attached
+  gz_topic_name: /gripper/attached
+  ros_type_name: std_msgs/msg/Bool
+  gz_type_name: gz.msgs.Boolean
+  direction: GZ_TO_ROS
+
+- ros_topic_name: /box_b/pose
+  gz_topic_name: /box_b/pose
+  ros_type_name: geometry_msgs/msg/Pose
+  gz_type_name: gz.msgs.Pose
+  direction: GZ_TO_ROS

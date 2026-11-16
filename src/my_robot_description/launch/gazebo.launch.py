@@ -1,5 +1,7 @@
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 from launch_ros.actions import Node
@@ -32,6 +34,8 @@ def generate_launch_description():
 
 
     return LaunchDescription([
+        DeclareLaunchArgument('pick_and_place', default_value='false'),
+        DeclareLaunchArgument('gui', default_value='true'),
 
         # Robot state publisher
         Node(
@@ -59,9 +63,8 @@ def generate_launch_description():
                 )
             ),
             launch_arguments={
-                'gz_args': '-r ' + shlex.quote(
-                    os.path.join(pkg, 'worlds', 'workcell.sdf')
-                ),
+                'gz_args': [PythonExpression(["'-r ' if '", LaunchConfiguration('gui'), "' == 'true' else '-r -s '"]),
+                            shlex.quote(os.path.join(pkg, 'worlds', 'workcell.sdf'))],
                 'on_exit_shutdown': 'true',
             }.items(),
         ),
@@ -78,7 +81,9 @@ def generate_launch_description():
         # Publish the target marker and the planned joint commands.
         Node(
             package='robot_motion',
-            executable='turnNode',
+            executable=PythonExpression([
+                "'pick_place' if '", LaunchConfiguration('pick_and_place'),
+                "' == 'true' else 'turnNode'"]),
             name='turn_node',
             parameters=[{'use_sim_time': True}],
             output='screen',
@@ -96,6 +101,7 @@ def generate_launch_description():
         Node(
             package='rviz2',
             executable='rviz2',
+            condition=IfCondition(LaunchConfiguration('gui')),
             arguments=['-d', rviz_config],
             parameters=[{'use_sim_time': True}],
             output='screen',

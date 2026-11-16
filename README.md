@@ -2,8 +2,8 @@
 
 A ROS 2 Jazzy workspace for visualizing and simulating a six-axis industrial
 robot. It includes the robot model, an RViz configuration, a Gazebo workcell,
-ROS–Gazebo topic bridges, and a demonstration node that alternates the robot
-between two joint configurations.
+ROS–Gazebo topic bridges, measured-feedback pose control, and an automatic
+upright pick-and-place sequence.
 
 ## Packages
 
@@ -122,22 +122,19 @@ The simulation starts running and publishes simulation time and joint states to
 ROS 2. See [`src/my_robot_description/worlds/README.md`](src/my_robot_description/worlds/README.md)
 for scene layout and reset instructions.
 
-### Move the robot
-
-With the Gazebo launch still running, open a second sourced terminal:
+### Complete the pick-and-place task
 
 ```bash
-ros2 run robot_motion turnNode
+ros2 launch my_robot_description gazebo.launch.py pick_and_place:=true
 ```
 
-The node publishes a new six-joint target every five seconds, alternating
-between its configured pose and the zero pose. Stop it with `Ctrl+C`.
-
-You can also command one joint directly (angles are in radians):
-
-```bash
-ros2 topic pub --once /robot/joint1/command std_msgs/msg/Float64 "{data: 0.4}"
-```
+Box A is at **(0.5, 0.5, 0)** (bottom centre), as requested. The robot picks up
+Box B from the ground and places it upright at the centre of Box A's top.
+The launch starts the motion node; do not start a second motion node alongside it.
+See [run instructions and report notes](docs/pick_and_place.md) for the sequence,
+D–H table, FK/IK equations, velocity planning, checks, and submission details.
+Without `pick_and_place:=true`, the launch exposes `/robot/move_to_pose` for
+manual control through the [dashboard](src/control_dashboard/README.md).
 
 ## Useful checks
 
