@@ -10,7 +10,7 @@ from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
 from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import JointState
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 
 from control_dashboard.srv import MoveToPose
 from robot_kinematics import generateH, H06
@@ -174,3 +174,83 @@ def test_orientation_only_movel_plans_through_wrist_singularity(robot):
     assert node.active
     assert node.joint_posLen > 1
     assert events[-1][0] == 'moving'
+
+
+def test_waypoint_grab_waits_for_arrival_and_new_acknowledgement(robot, monkeypatch):
+    node, _, _, events = robot
+    start, target = np.zeros(6), np.array([2., 0, 0, 0, 0, 0])
+    prepare(node, start)
+    node.on_gripper_feedback(Bool(data=False))
+    commands = []
+    monkeypatch.setattr(node.gripper_pub, 'publish', lambda msg: commands.append(msg.data))
+    request = request_for(target)
+    request.gripper_action = 'grab'
+    assert node.move_to_pose(request, MoveToPose.Response()).accepted
+    node.count = node.joint_posLen
+    node.timer_callback()
+    assert node.gripper_started is None and events[-1][0] == 'settling'
+    assert not commands
+    feedback(node, target)
+    node.timer_callback()
+    assert node.active and events[-1][0] == 'grabbing'
+    assert commands == [True]
+    assert not node.move_to_pose(request, MoveToPose.Response()).accepted
+    # A cached acknowledgement from before the command cannot finish the action.
+    node.attached = True
+    node.timer_callback()
+    assert node.active
+    node.on_gripper_feedback(Bool(data=True))
+    node.timer_callback()
+    assert not node.active and events[-1][0] == 'succeeded'
+
+
+def test_waypoint_release_waits_for_opening_and_reports_timeout(robot):
+    node, _, _, events = robot
+    prepare(node, np.zeros(6))
+    node.on_gripper_feedback(Bool(data=True))
+    request = request_for(np.zeros(6))
+    request.gripper_action = 'release'
+    assert node.move_to_pose(request, MoveToPose.Response()).accepted
+    node.count = node.joint_posLen
+    node.timer_callback()
+    node.on_gripper_feedback(Bool(data=False))
+    node.timer_callback()
+    assert node.active and events[-1][0] == 'releasing'
+    node.gripper_started -= 0.9
+    node.timer_callback()
+    assert not node.active and events[-1][0] == 'succeeded'
+
+    node.on_gripper_feedback(Bool(data=False))
+    request.gripper_action = 'grab'
+    assert node.move_to_pose(request, MoveToPose.Response()).accepted
+    node.count = node.joint_posLen
+    node.timer_callback()
+    node.gripper_started -= 11
+    node.timer_callback()
+    assert not node.active and events[-1][0] == 'failed'
+    assert 'gripper acknowledgement' in events[-1][2]
+
+
+def test_rejects_unknown_gripper_action_and_missing_feedback(robot):
+    node, _, _, _ = robot
+    prepare(node, np.zeros(6))
+    request = request_for(np.zeros(6))
+    request.gripper_action = 'invalid'
+    assert 'Gripper action' in node.move_to_pose(request, MoveToPose.Response()).message
+    request.gripper_action = 'grab'
+    assert 'gripper/attached' in node.move_to_pose(request, MoveToPose.Response()).message
+    assert not node.active
+
+
+def test_lost_grasp_stops_carrying_without_opening_jaws(robot, monkeypatch):
+    node, _, _, events = robot
+    prepare(node, np.zeros(6))
+    node.on_gripper_feedback(Bool(data=True))
+    commands = []
+    monkeypatch.setattr(node.gripper_pub, 'publish', lambda msg: commands.append(msg.data))
+    assert node.move_to_pose(request_for([2., 0, 0, 0, 0, 0]), MoveToPose.Response()).accepted
+    node.timer_callback()
+    node.on_gripper_feedback(Bool(data=False))
+    node.timer_callback()
+    assert not node.active and 'Grasp lost' in events[-1][2]
+    assert not commands

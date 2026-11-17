@@ -1,6 +1,8 @@
 # Desired world -> Link6 pose. Position: metres. Orientation: quaternion xyzw.
 geometry_msgs/Pose target
 bool move_linear
+# Action after measured arrival: "keep" (also the empty default), "grab", "release".
+string gripper_action
 ---
 # Acceptance after planning, not physical completion. See /robot/move_progress.
 bool accepted

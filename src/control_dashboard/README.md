@@ -1,64 +1,87 @@
-# Robot control dashboard
+# Robot waypoint dashboard
 
-The Tk GUI sends `/robot/move_to_pose` service requests to `turnNode` and displays
-`/robot/move_progress`. One move runs at a time. Services return an acceptance
-response after planning; the progress topic provides subsequent completion or
-failure. No motion is started automatically when `turnNode` starts.
-
-Build in the system ROS Jazzy environment (not the Conda ROS environment):
+Start the workcell from the workspace root:
 
 ```bash
-source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install --packages-up-to my_robot_description control_dashboard
-source install/setup.bash
-ros2 launch my_robot_description gazebo.launch.py
+./run.sh
 ```
 
-In a second sourced terminal:
+Gazebo, RViz, the motion controller, and the dashboard open together. **No robot
+motion starts automatically.** The former `pick_and_place:=true` launch argument
+is accepted for compatibility; it also waits for dashboard commands now.
+Use `./run.sh dashboard:=false` to open the simulator without the dashboard,
+or `./run.sh gui:=false dashboard:=true` for the dashboard with a headless simulator.
+
+## Edit and move
+
+1. Select a waypoint in the table. Its pose and gripper action appear in the editor.
+2. Change the name, XYZ in **millimetres**, and fixed-axis roll/pitch/yaw in **degrees**.
+   Coordinates describe **world → Link6**, not the end of the fingers.
+3. Choose **MoveL** for a straight Cartesian path, or uncheck it for joint motion.
+4. Set **On arrival** to **Keep**, **Grab**, or **Release**. Keep leaves the jaws in
+   their current state; Grab closes them and waits for attachment; Release opens
+   them and waits for detachment and 0.8 seconds of jaw retraction.
+5. Click **Move to waypoint**. This saves the current editor values into the
+   selected row, sets the target marker, plans, and moves. One click runs one
+   waypoint. Select the next row and click Move when ready.
+
+To run the full list, click **Execute motion plan**. This saves the selected
+row's current edits and runs **all waypoints from the first row to the last**,
+in table order. Each waypoint waits for measured arrival and its grab/release
+acknowledgement before the next starts. The bar shows overall plan progress and
+the status names the current waypoint. Editing and other motion buttons stay
+locked until the plan completes or stops.
+
+A rejected move, execution/gripper failure, or controller disconnection stops
+the remaining plan. Closing the dashboard also stops scheduling later waypoints;
+the currently accepted move still finishes. The plan does not run automatically
+when the dashboard opens or a waypoint file is loaded.
+
+**Add waypoint** appends the editor values; **Update** saves edits without moving;
+**Remove** deletes the selected row. **Save / Load** store and restore waypoint
+lists as JSON files. **Defaults** restores the original pick-and-place poses.
+**Move home** sends a joint-space move to the original home pose and keeps the
+current gripper state. Editing and further moves are disabled during an active move.
+
+The initial defaults preserve the former automatic sequence:
+
+| Waypoint | X (mm) | Y (mm) | Z (mm) | Motion | On arrival |
+| --- | ---: | ---: | ---: | --- | --- |
+| Approach | 450 | -200 | 470 | MoveJ | Keep |
+| Descend and grab | 450 | -200 | 170 | MoveL | Grab |
+| Lift | 450 | -200 | 470 | MoveL | Keep |
+| Transfer | 500 | 500 | 470 | MoveL | Keep |
+| Place and release | 500 | 500 | 372 | MoveL | Release |
+| Retreat | 500 | 500 | 470 | MoveL | Keep |
+
+All default orientations are roll=0°, pitch=90°, yaw=0° (Link6 +X points down).
+The original separate attach/release stages now belong to the corresponding
+arrival actions. The dashboard executes custom individual waypoints, so it does
+not automatically verify that Box B was placed on Box A after the last point.
+
+## Feedback and service
+
+The GUI sends `/robot/move_to_pose` (`control_dashboard/srv/MoveToPose`) and displays
+`/robot/move_progress` plus `/gripper/attached`. Planning acceptance is separate
+from completion. The controller waits for measured FK within **5 mm and 0.03 rad**,
+then applies the requested gripper action. 100% means both have completed.
+Gripper actions require fresh feedback and time out after 10 seconds. A lost
+grasp during carrying stops the move; failed carrying moves leave the jaws closed.
+Closing the dashboard does not cancel an accepted waypoint.
+
+Progress states: `idle`, `planning`, `moving`, `settling`, `grabbing`, `releasing`,
+`succeeded`, `failed`. Positions in the service are metres; orientations use xyzw
+quaternions. `gripper_action` accepts `keep` (or empty for compatibility), `grab`,
+or `release`. Existing measured-joint, joint-limit, IK, and settling checks remain.
+The planner has no general collision checking; choose clear approach/lift paths.
+
+To open a replacement dashboard in another terminal without rebuilding:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-source install/setup.bash
+source install/local_setup.bash
 ros2 run control_dashboard dashboard
 ```
 
-Restart any previously running `turnNode` after building. The Gazebo launch
-already starts it; do not run a second copy. The dashboard is launched separately
-to keep the existing simulation launch unchanged.
-
-Enter XYZ in **millimetres** and fixed-axis roll/pitch/yaw in **degrees**. The
-target is the **Link6 origin in world coordinates**. The service transports the
-position in metres and orientation as a quaternion. MoveL plans a straight
-Cartesian path; unchecking it uses the existing joint-space trajectory generator.
-The initial GUI values approximate the URDF's zero-joint pose. Positive rotations
-and conventions are those already configured in `robot_kinematics`.
-The **Home** button restores those home coordinates and requests a joint-space
-move, regardless of the MoveL checkbox state.
-
-`turnNode` uses measured `/joint_states` as the starting angles and reads limits
-from `/robot_description`. It rejects missing/stale feedback, invalid targets,
-failed IK/linear paths, trajectories exceeding joint limits, and requests while
-busy. Both feedback and description are provided by the existing Gazebo launch.
-
-Progress states are `idle`, `planning`, `moving`, `settling`, `succeeded`, `failed`.
-0–99% indicates how much of the planned command sequence has been sent, not the
-measured percentage of travel. 100% requires measured FK to reach the target
-within **5 mm and 0.03 rad**. After the final command it allows 10 seconds to
-settle; missing feedback for 2 seconds fails the move. These deadlines use wall
-time; the command timer follows ROS/simulation time. The existing planner has no
-collision checking, and closing the dashboard does not cancel an accepted move.
-
-The original `IK`, `s_curve`, conversions and joint publishers are reused.
-Optional original plots can be enabled with `show_plot:=true` on `turnNode`.
-
-Inspect the interface and progress:
-
-```bash
-ros2 interface show control_dashboard/srv/MoveToPose
-ros2 topic echo /robot/move_progress
-ros2 service call /robot/move_to_pose control_dashboard/srv/MoveToPose \
-  "{target: {position: {x: 0.547498, y: 0.0, z: 0.815002}, orientation: {x: -0.70710678, y: 0.0, z: 0.0, w: 0.70710678}}, move_linear: true}"
-```
-
-The package uses CMake to generate its service/message interfaces and installs
-one Python dashboard script. No web server or additional interface package is needed.
+Rebuild and restart both the motion controller and dashboard after interface
+changes. `run.sh` does this in a clean system ROS Jazzy environment.

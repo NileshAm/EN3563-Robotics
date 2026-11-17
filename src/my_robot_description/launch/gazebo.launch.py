@@ -11,7 +11,7 @@ from launch.actions import (
     SetEnvironmentVariable, Shutdown,
 )
 from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
@@ -24,8 +24,10 @@ def generate_launch_description():
         raise RuntimeError('Gazebo executable not found; source ROS Jazzy first')
 
     return LaunchDescription([
-        DeclareLaunchArgument('pick_and_place', default_value='false'),
+        DeclareLaunchArgument('pick_and_place', default_value='false',
+                              description='Legacy argument; waypoints now run from the dashboard'),
         DeclareLaunchArgument('gui', default_value='true'),
+        DeclareLaunchArgument('dashboard', default_value=LaunchConfiguration('gui')),
         DeclareLaunchArgument(
             'gazebo_partition', default_value=f'robot_prod_{uuid.uuid4().hex}',
             description='Gazebo transport partition shared only by this launch'),
@@ -58,11 +60,12 @@ def generate_launch_description():
         ),
         Node(
             package='robot_motion',
-            executable=PythonExpression([
-                "'pick_place' if '", LaunchConfiguration('pick_and_place'),
-                "' == 'true' else 'turnNode'",
-            ]),
+            executable='turnNode',
             name='turn_node', parameters=[{'use_sim_time': True}], output='screen',
+        ),
+        Node(
+            package='control_dashboard', executable='dashboard',
+            condition=IfCondition(LaunchConfiguration('dashboard')), output='screen',
         ),
         Node(
             package='monitor', executable='joint_monitor',

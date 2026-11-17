@@ -14,5 +14,9 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 install(PROGRAMS scripts/dashboard.py
   DESTINATION lib/${PROJECT_NAME} RENAME dashboard)
 install(FILES README.md DESTINATION share/${PROJECT_NAME})
+if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(waypoint_dashboard test/test_waypoints.py)
+endif()
 ament_export_dependencies(rosidl_default_runtime)
 ament_package()

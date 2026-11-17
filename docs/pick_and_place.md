@@ -5,12 +5,17 @@
 From the workspace root:
 
 ```bash
-./run.sh pick_and_place:=true
+./run.sh
 ```
 
-The sequence runs once automatically. Close and restart the launch for another
-run. Do not command the dashboard during the automatic sequence. For manual
-pose control, omit `pick_and_place:=true`. For a headless test add `gui:=false`.
+The dashboard opens with the original pick-and-place waypoints. Select a row,
+edit its pose and Keep / Grab / Release action, then click **Move to waypoint**.
+Each click runs one waypoint; motion never starts automatically. Add, update,
+remove, save, and load waypoints in the dashboard. See the
+[dashboard guide](../src/control_dashboard/README.md) for the controls and units.
+Click **Execute motion plan** to run the complete list in order, waiting for
+each waypoint and its gripper action. Any failed step stops the remaining plan.
+For a headless simulator with the dashboard add `gui:=false dashboard:=true`.
 The launcher builds and runs with system ROS Jazzy in a clean environment,
 preventing Conda ROS libraries from causing `fastcdr` symbol lookup errors.
 Gazebo discovery uses loopback so VPN interfaces do not interrupt local feedback;
@@ -42,7 +47,9 @@ friction-based contact model. Opening releases the joint and retracts the jaws;
 the sequence waits 0.8 seconds before retreating. Joint-state feedback includes
 both finger joints, so their motion is also visible in RViz.
 
-The automatic sequence uses these Link6-origin coordinates in metres:
+The default dashboard waypoints preserve these Link6-origin coordinates in metres.
+Attach runs on arrival at Descend; Release runs on arrival at Place. Verify is
+part of the validation procedure, rather than an automatic dashboard step:
 
 | Stage | X | Y | Z | Motion |
 |---|---:|---:|---:|---|
@@ -60,9 +67,10 @@ The target flange rotation is R_y(90°); local +X points vertically down. Holdin
 this rotation throughout carrying preserves the cube's original orientation.
 The transfer clears Box A by 125 mm at the cube's bottom. Each move waits for
 measured FK to reach the requested pose, rather than just finishing commands.
-Missing feedback, unreachable poses, joint limits, lost grasp and excessive
-object rotation stop the sequence. The jaws stay closed if a carrying motion fails.
-Completion requires measured Box B centre within 10 mm of (0.5, 0.5, 0.225),
+Missing feedback, unreachable poses, joint limits and lost grasp stop the current
+waypoint. The jaws stay closed if a carrying motion fails. The default paths hold
+the flange orientation; the dashboard also permits custom orientations.
+The validation procedure checks measured Box B centre within 10 mm of (0.5, 0.5, 0.225),
 rotation within 0.08 rad of its starting orientation, and a released grasp.
 These are numerical simulation tolerances, not a claim of exact zero error.
 
@@ -146,8 +154,9 @@ vertical approach/lift waypoints and an elevated transfer.
 
 ## Validation and submission
 
-A real headless Gazebo run completed approach, grasp, lift, transfer, release,
-retreat and measured placement verification. The completion log is saved in
+A real Gazebo run driven through the dashboard Move button completed approach,
+grasp, lift, transfer, release and retreat. A separate check verified placement.
+The completion log is saved in
 `docs/pick_place_validation.log`. Kinematics, motion-service and monitor
 regressions are also run; the nominal D–H model has a separate consistency test.
 

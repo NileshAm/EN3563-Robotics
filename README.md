@@ -2,8 +2,8 @@
 
 A ROS 2 Jazzy workspace for visualizing and simulating a six-axis industrial
 robot. It includes the robot model, an RViz configuration, a Gazebo workcell,
-ROS–Gazebo topic bridges, measured-feedback pose control, and an automatic
-upright pick-and-place sequence.
+ROS–Gazebo topic bridges, measured-feedback pose control, and a dashboard with editable
+upright pick-and-place waypoints.
 
 ## Packages
 
@@ -117,7 +117,7 @@ Use the Joint State Publisher window to move individual joints.
 ./run.sh
 ```
 
-This starts Gazebo, RViz, `robot_state_publisher`, and the ROS–Gazebo bridge.
+This starts Gazebo, RViz, the waypoint dashboard, `robot_state_publisher`, and the ROS–Gazebo bridge.
 The simulation starts running and publishes simulation time and joint states to
 ROS 2. See [`src/my_robot_description/worlds/README.md`](src/my_robot_description/worlds/README.md)
 for scene layout and reset instructions.
@@ -125,7 +125,7 @@ for scene layout and reset instructions.
 ### Complete the pick-and-place task
 
 ```bash
-./run.sh pick_and_place:=true
+./run.sh
 ```
 
 `run.sh` builds and launches using system ROS Jazzy in a clean environment,
@@ -134,11 +134,17 @@ add `gui:=false` for a headless simulation.
 
 Box A is at **(0.5, 0.5, 0)** (bottom centre), as requested. The robot picks up
 Box B from the ground and places it upright at the centre of Box A's top.
+The dashboard loads the original poses by default. Select each waypoint and click
+**Move to waypoint**, or edit/add poses and select Keep / Grab / Release on arrival.
+No motion starts automatically. Save and load your custom lists as JSON.
+Click **Execute motion plan** to run every waypoint in table order, waiting for
+each move and gripper action to finish. A failed step stops the remaining plan.
 The launch starts the motion node; do not start a second motion node alongside it.
 See [run instructions and report notes](docs/pick_and_place.md) for the sequence,
 D–H table, FK/IK equations, velocity planning, checks, and submission details.
-Without `pick_and_place:=true`, the launch exposes `/robot/move_to_pose` for
-manual control through the [dashboard](src/control_dashboard/README.md).
+The launch exposes `/robot/move_to_pose` for individual waypoint control through
+the [dashboard](src/control_dashboard/README.md). The legacy `pick_and_place` flag
+is accepted but no longer starts automatic motion.
 
 ## Useful checks
 
@@ -175,7 +181,7 @@ robot_prod/
 ## Troubleshooting
 
 - **`fastcdr` undefined symbol / nodes exit with code 127:** system ROS and
-  Conda ROS libraries have been mixed. Use `./run.sh pick_and_place:=true` to
+  Conda ROS libraries have been mixed. Use `./run.sh` to
   rebuild and launch with only system ROS libraries.
 - **Box B start-location error immediately after a fresh launch:** an older
   Gazebo server may still be publishing its finished scene. New launches use

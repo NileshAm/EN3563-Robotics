@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
-from std_msgs.msg import Float64, String
+from std_msgs.msg import Bool, Float64, String
 from sensor_msgs.msg import JointState
 from control_dashboard.srv import MoveToPose
 from control_dashboard.msg import MoveProgress
@@ -28,6 +28,14 @@ class TurnNode(Node):
         self.joint_posLen = 0
         self.count = 0
         self.settle_started = None
+        self.gripper_action = 'keep'
+        self.gripper_started = None
+        self.attached = False
+        self.gripper_feedback_time = 0.0
+        self.carrying = False
+        self.gripper_pub = self.create_publisher(Bool, '/gripper/close', 10)
+        self.gripper_sub = self.create_subscription(
+            Bool, '/gripper/attached', self.on_gripper_feedback, 10)
 
         self.joints = {}
 
@@ -94,6 +102,10 @@ class TurnNode(Node):
     def report(self, state, percent, message):
         self.progress_pub.publish(MoveProgress(state=state, percent=float(percent), message=message))
 
+    def on_gripper_feedback(self, msg):
+        self.attached = msg.data
+        self.gripper_feedback_time = time.monotonic()
+
     def move_to_pose(self, request, response):
         if self.active:
             response.message = 'Robot is busy; wait for the current move to finish'
@@ -106,6 +118,11 @@ class TurnNode(Node):
             return response
         p, q = request.target.position, request.target.orientation
         try:
+            gripper_action = request.gripper_action or 'keep'
+            if gripper_action not in ('keep', 'grab', 'release'):
+                raise ValueError('Gripper action must be keep, grab, or release')
+            if gripper_action != 'keep' and time.monotonic() - self.gripper_feedback_time > 2:
+                raise ValueError('No fresh /gripper/attached feedback')
             xyz = array([p.x, p.y, p.z]) * 1000.0
             quaternion = array([q.x, q.y, q.z, q.w])
             if not isfinite(xyz).all() or not isfinite(quaternion).all():
@@ -137,6 +154,9 @@ class TurnNode(Node):
         self.active = True
         self.move_started = time.monotonic()
         self.settle_started = None
+        self.gripper_action = gripper_action
+        self.gripper_started = None
+        self.carrying = self.attached
         response.accepted = True
         response.message = 'Move accepted; follow /robot/move_progress for completion'
         self.report('moving', 0.0, 'Executing trajectory')
@@ -200,6 +220,17 @@ class TurnNode(Node):
             self.active = False
             self.report('failed', 99.0 * self.count / self.joint_posLen, 'Joint feedback lost')
             return
+        if self.gripper_started is not None:
+            self.tick_gripper()
+            return
+        if self.carrying and (not self.attached or
+                              time.monotonic() - self.gripper_feedback_time > 2.0):
+            if self.count == 0 and time.monotonic() - self.move_started < 2.0:
+                return
+            self.active = False
+            self.report('failed', 99.0 * self.count / self.joint_posLen,
+                        'Grasp lost while carrying; waypoint stopped')
+            return
         if self.count < self.joint_posLen:
             pos = self.joint_pos[self.count]
             for i in range(1,7):
@@ -218,11 +249,33 @@ class TurnNode(Node):
         orientation_error = Rotation.from_matrix(
             self.target[:3, :3] @ measured[:3, :3].T).magnitude()
         if position_error < 5.0 and orientation_error < 0.03:
-            self.active = False
-            self.report('succeeded', 100.0, 'Measured target reached (within 5 mm and 0.03 rad)')
+            if self.gripper_action == 'keep':
+                self.active = False
+                self.report('succeeded', 100.0, 'Measured target reached (within 5 mm and 0.03 rad)')
+            else:
+                self.gripper_started = time.monotonic()
+                self.report('grabbing' if self.gripper_action == 'grab' else 'releasing',
+                            99.0, 'Target reached; waiting for gripper acknowledgement')
+                self.tick_gripper()
         elif time.monotonic() - self.settle_started > 10.0:
             self.active = False
             self.report('failed', 99.0, 'Timed out waiting for measured target pose')
+
+    def tick_gripper(self):
+        now = time.monotonic()
+        want = self.gripper_action == 'grab'
+        self.gripper_pub.publish(Bool(data=want))
+        elapsed = now - self.gripper_started
+        if now - self.gripper_feedback_time > 2.0 or elapsed > 10.0:
+            self.active = False
+            self.report('failed', 99.0, 'Gripper feedback lost' if
+                        now - self.gripper_feedback_time > 2.0 else
+                        'Timed out waiting for gripper acknowledgement')
+        elif (self.gripper_feedback_time > self.gripper_started and
+              self.attached == want and (want or elapsed >= 0.8)):
+            self.active = False
+            self.report('succeeded', 100.0, 'Waypoint reached; object grabbed' if want else
+                        'Waypoint reached; object released and jaws retracted')
 
 def main(args=None):
     rclpy.init(args=args)
