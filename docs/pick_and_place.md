@@ -5,15 +5,19 @@
 From the workspace root:
 
 ```bash
-source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install
-source install/setup.bash
-ros2 launch my_robot_description gazebo.launch.py pick_and_place:=true
+./run.sh pick_and_place:=true
 ```
 
 The sequence runs once automatically. Close and restart the launch for another
 run. Do not command the dashboard during the automatic sequence. For manual
 pose control, omit `pick_and_place:=true`. For a headless test add `gui:=false`.
+The launcher builds and runs with system ROS Jazzy in a clean environment,
+preventing Conda ROS libraries from causing `fastcdr` symbol lookup errors.
+Gazebo discovery uses loopback so VPN interfaces do not interrupt local feedback;
+set `GZ_IP` explicitly if using Gazebo across machines.
+Each launch has its own Gazebo transport partition, so an older simulator cannot
+feed stale box poses into a new sequence. The server and GUI are supervised
+directly and both stop when the launch exits.
 RViz shows named link frames; Gazebo shows the boxes and physical parallel gripper.
 
 Box A is 0.30 × 0.30 × 0.20 m, with its bottom-centre model origin at

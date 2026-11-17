@@ -114,7 +114,7 @@ Use the Joint State Publisher window to move individual joints.
 ### Run the Gazebo workcell
 
 ```bash
-ros2 launch my_robot_description gazebo.launch.py
+./run.sh
 ```
 
 This starts Gazebo, RViz, `robot_state_publisher`, and the ROS–Gazebo bridge.
@@ -125,8 +125,12 @@ for scene layout and reset instructions.
 ### Complete the pick-and-place task
 
 ```bash
-ros2 launch my_robot_description gazebo.launch.py pick_and_place:=true
+./run.sh pick_and_place:=true
 ```
+
+`run.sh` builds and launches using system ROS Jazzy in a clean environment,
+including when called from a Conda terminal. It forwards launch arguments;
+add `gui:=false` for a headless simulation.
 
 Box A is at **(0.5, 0.5, 0)** (bottom centre), as requested. The robot picks up
 Box B from the ground and places it upright at the centre of Box A's top.
@@ -170,6 +174,12 @@ robot_prod/
 
 ## Troubleshooting
 
+- **`fastcdr` undefined symbol / nodes exit with code 127:** system ROS and
+  Conda ROS libraries have been mixed. Use `./run.sh pick_and_place:=true` to
+  rebuild and launch with only system ROS libraries.
+- **Box B start-location error immediately after a fresh launch:** an older
+  Gazebo server may still be publishing its finished scene. New launches use
+  separate Gazebo partitions and supervise the server directly to prevent this.
 - **Package not found:** source `/opt/ros/jazzy/setup.bash`, rebuild, then source
   `install/setup.bash` in the current terminal.
 - **Robot meshes are missing:** launch from a terminal where the workspace setup
