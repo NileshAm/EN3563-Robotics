@@ -1,0 +1,1153 @@
+\documentclass[11pt,a4paper]{report}
+\usepackage[margin=25mm]{geometry}
+\usepackage{amsmath,amssymb,booktabs,longtable,array,graphicx,xcolor,listings,hyperref}
+\usepackage[T1]{fontenc}
+\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue}
+\lstset{basicstyle=\ttfamily\scriptsize,breaklines=true,columns=fullflexible,keepspaces=true,showstringspaces=false,frame=single,numbers=left,numberstyle=\tiny,tabsize=4}
+\newcommand{\edit}[1]{\textcolor{red}{[EDIT: #1]}}
+\newcommand{\placeholder}[1]{\begin{center}\fbox{\parbox{0.88\linewidth}{\centering\vspace{12mm}#1\vspace{12mm}}}\end{center}}
+\title{EN3563 Robotics\\Mini Project: Implementation of a Robot Arm\\\large Six-axis GP7 Pick-and-Place Workcell}
+\author{\edit{Group member names and index numbers}}
+\date{18 November 2026}
+\setlength{\emergencystretch}{3em}
+\begin{document}
+\maketitle
+\begin{abstract}
+We implemented a simulated pick-and-place workcell using the supplied GP7 robot model, ROS 2 Jazzy and Gazebo. As said in the assignment, we needed to model the robot, calculate forward and inverse kinematics, plan smooth motion, and keep the carried object upright. We used a six-joint model, a numerical inverse-kinematics solver, quintic time scaling, Cartesian carrying trajectories, measured joint feedback, and a simplified parallel gripper. We also implemented a dashboard for editing and executing waypoints. The saved validation records report successful placement with position errors of 2.39 mm for individual waypoint execution and 2.14 mm for full-plan execution. These are results recorded in the repository, not new simulation measurements made while preparing this report. Our implemented Box A location differs from the assignment; we state this explicitly below.
+\end{abstract}
+\tableofcontents
+\chapter{Assignment, Scope and Design Decisions}
+\section{What we were asked to do}
+As said in the assignment, we were required to use a robot arm with at least four degrees of freedom to pick up an object and place it at a specified destination while maintaining its orientation. We selected the simulation option and used the supplied YASKAWA GP7 CAD-derived model. The assignment permits a simplified gripper because the provided model does not contain an end effector. We used six revolute arm joints so that we could control both position and orientation.
+
+We organized our work into model preparation, frame assignment, kinematics, trajectory planning, simulation control, grasping, and validation. The task sheet additionally requires group index numbers, code snippets, a report, and a screen-recorded demonstration. Personal details and the demonstration video must be added before submission.
+\section{Requirement mapping and declared deviation}
+\begin{longtable}{p{.29\linewidth}p{.62\linewidth}}
+\toprule Assignment requirement & What we implemented \\\midrule
+Robot at the origin & World-mounted model at the origin, with the existing 180-degree base mounting yaw.\\
+Box A: $0.30\times0.30\times0.20$ m at $(1,1,0)$ m & Same dimensions, but bottom centre at $(0.5,0.5,0)$ m in the current implementation. This is a project change, not the original assignment coordinate.\\
+Box B: $0.05$ m cube at a reachable ground location & Reproducible initial centre $(0.45,-0.20,0.025)$ m.\\
+Upright carrying & Constant desired flange rotation during the carrying path; numerical tracking and grasp constraints introduce finite error.\\
+Frames and D--H model & Standard D--H table, transforms, and a separate CAD-frame runtime chain.\\
+Forward and inverse kinematics & Matrix-chain FK and damped numerical pose IK.\\
+Smooth velocity & Quintic time scaling and duration adjustment against joint velocity and acceleration limits.\\
+Results and video & Saved successful simulation logs; final screenshots and screen recording still need to be inserted.\\\bottomrule
+\end{longtable}
+We cannot claim exact compliance with the original placement coordinate while using the modified location. Before submission, we need to confirm acceptance of this change or revise and revalidate the scene and path against the original specification.
+\section{Why we made these implementation choices}
+We separated the kinematics from the ROS interface so that the mathematical model could be checked independently. We used numerical IK because it directly uses the implemented CAD-derived forward chain and accommodates full pose targets without a separate geometric branch derivation. This choice requires an initial guess and does not guarantee convergence to every reachable target. We seeded consecutive solves with nearby joint configurations to encourage continuity.
+
+We used explicit lift and transfer waypoints because the scene is fixed and simple. This is not a general obstacle-avoidance planner. We selected a quintic profile to obtain zero velocity and acceleration at segment boundaries. We used measured feedback to decide when a waypoint had actually been reached, because finishing a command list alone does not establish physical arrival.
+\chapter{Robot Model and Workcell}
+\section{Model preparation}
+We used the repository's URDF and CAD link meshes for the arm. The URDF describes link geometry, joint origins, axes, limits, and the fixed mounting transform. Gazebo supplies the simulated dynamics and joint position controllers. RViz displays the robot and named link frames through robot\_state\_publisher. The dimensions in this report are taken from the existing model; we do not claim that we independently measured them in SolidWorks.
+\section{World geometry and coordinate interpretation}
+We distinguished object bottom-centre coordinates from object centre coordinates. Box A has its bottom at $z=0$ and its top at $z=0.20$ m. Box B initially has its centre at $z=0.025$ m so that its bottom lies on the ground. Consequently the desired settled centre is
+\begin{equation}p_{B,d}=(0.5,0.5,0.20+0.025)^T=(0.5,0.5,0.225)^T\ \mathrm{m}.\end{equation}
+\placeholder{Insert a Gazebo screenshot showing the robot, world axes, Box A, Box B, and their dimensions.}
+\section{Simplified end effector}
+We added a parallel gripper with two prismatic finger joints. The documented open collision-surface gap is 90 mm and the closed gap is 50 mm, matching Box B. Each finger has 22 mm travel and a 5 N force limit. The fingers extend 163 mm from the flange. At the pickup flange height of 170 mm, this leaves nominal ground clearance of $170-163=7$ mm.
+
+We used physical jaw motion followed by an assisted grasp: once the box is suitably positioned and aligned and the fingers have closed, the plugin creates a fixed attachment. Opening removes this attachment and retracts the jaws. We therefore demonstrated an assisted simulated grasp; the results do not establish that friction alone would hold the object on a physical robot.
+\chapter{Coordinate Frames and Forward Kinematics}
+\section{Units and conventions}
+Our mathematical joint angles are in degrees and our FK translations are in millimetres. ROS joint positions are in radians and ROS poses use metres. We used the following shared conversion for joint $i$:
+\begin{align}
+q_{i,\mathrm{model}}&=d_i\frac{180}{\pi}q_{i,\mathrm{ROS}}+o_i,\\
+q_{i,\mathrm{ROS}}&=\frac{\pi}{180}\frac{q_{i,\mathrm{model}}-o_i}{d_i}.
+\end{align}
+Here $d_i$ is a direction multiplier, not a D--H link offset. The current configuration uses all direction multipliers equal to $+1$ and all calibration offsets equal to zero.
+\section{Frame assignment}
+We assigned $z_{i-1}$ along the axis of joint $i$, chose $x_i$ along the common normal between adjacent joint axes, and completed the right-handed frame with $y_i=z_i\times x_i$. Frame 0 is the world reference in the nominal D--H model. The mathematical D--H frames differ from the imported CAD link frames. A labelled frame illustration must identify which set of frames is shown.
+\placeholder{Insert the labelled D--H frame diagram (frames 0--6) and a separate RViz view of the CAD link frames.}
+\section{Standard D--H parameters}
+We used $A_i=R_z(\theta_i)T_z(d_i)T_x(a_i)R_x(\alpha_i)$ with $\theta_i=q_i+\theta_{i,0}$.
+\begin{center}\begin{tabular}{rrrrr}\toprule
+$i$ & $a_i$ (mm) & $\alpha_i$ (deg) & $d_i$ (mm) & $\theta_{i,0}$ (deg)\\\midrule
+1&40&-90&330&0\\2&445&0&0&-90\\3&40&-90&0&0\\4&0&90&440&0\\5&0&90&0&180\\6&0&0&67.5&0\\\bottomrule
+\end{tabular}\end{center}
+For each row we constructed
+\begin{equation}
+A_i=\begin{bmatrix}
+c_i&-s_i c_{\alpha_i}&s_i s_{\alpha_i}&a_i c_i\\
+s_i&c_i c_{\alpha_i}&-c_i s_{\alpha_i}&a_i s_i\\
+0&s_{\alpha_i}&c_{\alpha_i}&d_i\\0&0&0&1
+\end{bmatrix},
+\end{equation}
+where $c_i=\cos\theta_i$ and $s_i=\sin\theta_i$. We multiplied the six matrices and converted the final mathematical frame to Link6:
+\begin{equation}
+{}^WT_{L6}=A_1A_2A_3A_4A_5A_6C,\qquad
+C=\begin{bmatrix}0&1&0&0\\0&0&1&0\\1&0&0&0\\0&0&0&1\end{bmatrix}.
+\end{equation}
+This gives both $p(q)$ and $R(q)$ from the translation column and rotation block. The runtime function H06 instead multiplies the URDF-equivalent joint transformations including the world mounting rotation. We kept its rounded CAD angles, such as 1.5708 rad, to match the simulated model. The nominal D--H chain uses exact right angles; their small numerical differences are checked by a dedicated regression test.
+\section{Tool offset and waypoint heights}
+The tool-tip reference is 120 mm along Link6 local $+X$:
+\begin{equation}{}^WT_{tip}={}^WT_{L6}T_x(120).\end{equation}
+We selected $R_d=R_y(90^\circ)$ so that local $+X$ points downwards. At pickup, the box top is 50 mm above the ground, giving a flange target $50+120=170$ mm. At placement, the box top should be $200+50=250$ mm above the ground; adding the 120 mm offset and 2 mm release clearance gives $372$ mm. At the 470 mm transfer height, the nominal box bottom is $470-120-50=300$ mm, giving 100 mm clearance above Box A. This geometric bottom-clearance calculation corrects the 125 mm wording in the existing project notes, which corresponds to the box centre rather than its bottom.
+\chapter{Inverse Kinematics}
+\section{Pose-error formulation}
+As said in the assignment, we needed equations to obtain joint angles for a desired position and orientation. We solved the nonlinear pose equations iteratively. For desired $(p_d,R_d)$ we defined
+\begin{equation}
+e(q)=\begin{bmatrix}p_d-p(q)\\\operatorname{Log}(R_dR(q)^T)^\vee\end{bmatrix}.
+\end{equation}
+The lower three entries are a rotation vector in radians. This avoids directly subtracting Euler angles, which is particularly important at our 90-degree pitch target.
+\section{Numerical update}
+We approximated the error Jacobian with perturbations $\epsilon=10^{-4}$ degrees:
+\begin{equation}J_{e,:,i}\simeq\frac{e(q+\epsilon e_i)-e(q)}{\epsilon}.\end{equation}
+We scaled the errors by position and orientation tolerances using a diagonal matrix $W$. With a seed $q_s$, damping $\lambda$, and a fading seed attraction $\mu$, the correction is
+\begin{equation}
+\Delta q=-\left(J_e^TW^2J_e+(\lambda^2+\mu^2)I\right)^{-1}
+\left(J_e^TW^2e+\mu^2(q-q_s)\right).
+\end{equation}
+We implemented this with a linear-system solve rather than an explicit matrix inverse. The negative sign follows from differentiating the error itself. We limited the largest update to 5 degrees and used backtracking to accept a reduction in the weighted objective. If a step could not be accepted, we increased damping. The default solve uses 300 iterations, 0.1 mm position tolerance, and $10^{-3}$ rad rotation tolerance; intermediate Cartesian samples allow up to 1000 iterations.
+
+We used measured starting joints for motion planning and the preceding sample for subsequent Cartesian IK solves. A failed solve rejects the path. Joint-limit checks belong to the motion layer; the numerical solver alone is not a constrained optimizer. A reachable endpoint does not guarantee that every point on a straight Cartesian path is reachable.
+\chapter{Trajectory Planning and Velocity Control}
+\section{Quintic time law}
+We used normalized time $u=t/T$ and
+\begin{align}
+s(u)&=10u^3-15u^4+6u^5,\\
+\dot{s}(t)&=(30u^2-60u^3+30u^4)/T,\\
+\ddot{s}(t)&=(60u-180u^2+120u^3)/T^2.
+\end{align}
+These equations satisfy $s(0)=0$, $s(1)=1$, and zero endpoint velocity and acceleration. Although the code calls this an S-curve, it is specifically quintic time scaling; it is not a seven-segment jerk-limited profile.
+\section{Joint-space motion}
+For MoveJ we generated
+\begin{equation}q(t)=q_0+s(t)(q_f-q_0),\quad\dot q=\dot s\Delta q,\quad\ddot q=\ddot s\Delta q.\end{equation}
+We chose the common segment duration using the peaks of the normalized derivatives:
+\begin{equation}
+T=\max_i\left(\frac{1.875|\Delta q_i|}{v_{i,\max}},
+\sqrt{\frac{5.7735|\Delta q_i|}{a_{i,\max}}}\right).
+\end{equation}
+We configured nominal motion limits of 45 degrees/s and 45 degrees/s$^2$. These are software planning settings, not a claim that they are the manufacturer's maximum values. For example, a 90-degree displacement gives a velocity-based bound of 3.75 s and an acceleration-based bound of about 3.40 s; the velocity constraint sets 3.75 s for that joint.
+\section{Cartesian motion and upright transport}
+For MoveL we interpolated
+\begin{align}
+p(t)&=p_0+s(t)(p_f-p_0),\\
+R(t)&=R_0\operatorname{Exp}\left(s(t)\operatorname{Log}(R_0^TR_f)\right).
+\end{align}
+When the endpoint rotations agree, the planned rotation stays constant. We therefore used MoveL for descent, lift, transfer, placement and retreat. The initial approach may use MoveJ because the object has not yet been grasped. Actual initial tracking error can introduce a small orientation interpolation, so constant desired orientation is not evidence of exactly zero measured error.
+
+We solved IK at sampled path points, unwrapped equivalent joint-angle turns, and estimated derivatives. If Cartesian motion demanded excessive sampled joint derivatives, we stretched its time using
+\begin{equation}k=\max\left(1,\max_{i,t}\frac{|\dot q_i|}{v_{i,\max}},\sqrt{\max_{i,t}\frac{|\ddot q_i|}{a_{i,\max}}}\right).\end{equation}
+We resampled the stretched path. Interpolation and finite differences mean that this is a sampled numerical check, not a continuous-time proof of all limits.
+\section{Execution and feedback}
+We published joint position samples at a nominal 100 Hz and used Gazebo joint position controllers to track them. Velocity shaping is achieved by the time sequence of position commands. We did not implement a separate hardware velocity servo. We computed arrival from measured joint positions through FK and required agreement within 5 mm and 0.03 rad before applying the arrival gripper action.
+
+For monitoring Cartesian motion, we used $\dot p=J_p\dot q$ and $\ddot p=J_p\ddot q+\dot J_p\dot q$. The shared kinematics implementation estimates the curvature term numerically. Omitting it would give incorrect acceleration during curved joint-induced Cartesian motion.
+\chapter{Software Architecture and Complete Workflow}
+\section{Package responsibilities}
+\begin{longtable}{p{.30\linewidth}p{.61\linewidth}}\toprule
+Package & Responsibility\\\midrule
+\texttt{my\_robot\_description}&URDF, meshes, world, launch, bridges, gripper plugin.\\
+\texttt{robot\_kinematics}&FK, IK, D--H frames, convention conversion and profiles.\\
+\texttt{robot\_motion}&Pose service, planning, command publication, settling and gripper sequencing.\\
+\texttt{monitor}&Read-only measured joint and end-effector feedback.\\
+\texttt{control\_dashboard}&Waypoint editor, plan execution, progress and custom interfaces.\\\bottomrule
+\end{longtable}
+\section{Communication}
+The dashboard requests motion through \texttt{/robot/move\_to\_pose}. The request contains a world-to-Link6 pose, a linear-motion flag, and an arrival action. Position uses metres and orientation uses an xyzw quaternion. Service acceptance means that planning was accepted; it does not mean physical completion.
+
+The controller sends six joint command topics through the ROS--Gazebo bridge. Joint feedback returns on \texttt{/joint\_states}. The dashboard observes \texttt{/robot/move\_progress} and \texttt{/gripper/attached}. Gripper commands use \texttt{/gripper/close}, while actual Box B pose is available on \texttt{/box\_b/pose}. The bridge also supplies simulation time. The monitor matches joints by name and calculates pose from measured angles rather than requested commands.
+\section{Our operating sequence}
+We launched the workcell with \texttt{./run.sh}. The launcher builds in a clean system ROS environment and opens Gazebo, RViz and the dashboard. We waited for feedback, inspected the default waypoints, and either executed individual rows or selected Execute motion plan. Loading a plan does not start motion automatically.
+\begin{center}\begin{tabular}{lrrrll}\toprule
+Stage & X & Y & Z & Motion & Arrival\\\midrule
+Approach&450&-200&470&MoveJ&Keep\\
+Descend&450&-200&170&MoveL&Grab\\
+Lift&450&-200&470&MoveL&Keep\\
+Transfer&500&500&470&MoveL&Keep\\
+Place&500&500&372&MoveL&Release\\
+Retreat&500&500&470&MoveL&Keep\\\bottomrule
+\end{tabular}\end{center}
+All coordinates in this table are Link6 origins in millimetres; all default orientations are roll $0^\circ$, pitch $90^\circ$, yaw $0^\circ$.
+
+We approached above Box B, descended vertically, and waited for grasp acknowledgement. We lifted vertically before moving laterally above Box A. We descended to the release height, opened the fingers, waited for detachment and 0.8 s of jaw retraction, and retreated upwards. We then checked the actual object pose after settling. The final object check is separate from the dashboard's six-waypoint completion condition.
+\section{Failure handling and dashboard behavior}
+We used progress states idle, planning, moving, settling, grabbing, releasing, succeeded and failed. Missing or stale feedback, failed IK, invalid joints, or loss of grasp stop the current operation. Failed carrying motions keep the jaws closed. Gripper operations require feedback and have a documented 10 s timeout. A failed plan step prevents later rows from being scheduled. Closing the dashboard stops scheduling further rows but does not cancel an already accepted move; this is not an emergency-stop facility.
+
+We allowed users to add, update, remove, save and load waypoint lists as JSON. These controls permit custom orientations and paths, so the operator must preserve the upright and clearance conditions when editing a plan.
+\chapter{Validation, Results and Discussion}
+\section{Available evidence}
+We based the following results on the saved repository logs. We have not repeated the live robot simulation during report preparation. The individual-waypoint log records success for approach, grasp, lift, transfer, release and retreat. The full-plan log records completion of six waypoints after one Execute motion plan command.
+\begin{center}\begin{tabular}{lp{.37\linewidth}r}\toprule
+Recorded run & Final Box B centre (m) & Logged error\\\midrule
+Individual waypoints & $(0.4978,0.5009,0.2250)$ &2.39 mm\\
+Full motion plan & $(0.4980,0.5009,0.2250)$ &2.14 mm\\\bottomrule
+\end{tabular}\end{center}
+We evaluated position error as $\|p_{B,\mathrm{measured}}-(0.5,0.5,0.225)^T\|$. The displayed coordinates are rounded, so recomputing the norm from them can differ slightly from the logged error. Both saved errors lie within the documented 10 mm placement tolerance. These two runs do not establish statistical repeatability or hardware accuracy.
+\section{Orientation verification and limitations of the evidence}
+We planned constant carrying orientation and documented a final orientation tolerance of 0.08 rad relative to the starting object orientation. However, the short placement logs do not give the maximum measured orientation error over the entire carrying interval. To substantiate the assignment's entire-motion requirement, we should record Box B orientation continuously and plot
+\begin{equation}e_R(t)=\left\|\operatorname{Log}(R_B(t)R_B(0)^T)^\vee\right\|.\end{equation}
+We should also record joint velocities and accelerations to compare measured behavior with the planned limits. Euler roll and yaw may change abruptly near 90-degree pitch even for a nearly unchanged rotation; quaternion or rotation-matrix error is the appropriate check.
+\placeholder{Insert final placement screenshot and plots of measured object orientation, joint position, velocity and acceleration. No missing measurements are represented as completed results.}
+\section{Regression checks}
+The repository includes tests for D--H consistency, joint conventions, motion service behavior, waypoint logic, and measured-state monitoring. The D--H test compares 30 seeded configurations with the runtime chain at 0.03 mm and $10^{-4}$ rad tolerances. These are test criteria; fresh pass totals should be obtained from the actual test run before submission. Existing older README statements about startup assumptions should not override the current measured-feedback controller.
+\section{Practical issues we addressed}
+We isolated the launch environment to prevent mixed Conda and system ROS libraries from causing symbol errors. We used separate Gazebo transport partitions to prevent an old simulation from supplying stale state to a new run. We kept frame and unit conversions explicit, and used measured settling checks to account for simulation tracking lag. We treated grasp stabilization as a modelling simplification and did not interpret the attachment as friction validation.
+\chapter{Reproduction and Submission}
+\section{Build and run}
+The documented environment is Ubuntu 24.04, ROS 2 Jazzy and Gazebo Harmonic. Once dependencies are installed, we use:
+\begin{lstlisting}[language=bash]
+source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install
+source install/setup.bash
+./run.sh
+# Read-only feedback inspection in another sourced terminal:
+ros2 topic echo /monitor/end_effector_pose --once
+ros2 topic echo /joint_states --once
+# Regression checks:
+colcon test
+colcon test-result --verbose
+\end{lstlisting}
+We restart the launch to reset the world and grasp state rather than resetting Gazebo during an active attachment. We rebuild interfaces and restart both the controller and dashboard after service or message changes.
+\section{Submission details to complete}
+\begin{enumerate}
+\item Replace the title-page member and index-number field.
+\item Resolve the difference between the assigned and implemented Box A position.
+\item Insert labelled coordinate-frame and workcell screenshots.
+\item Add measured orientation and motion plots if claiming verified bounds over the full trajectory.
+\item Record the visible simulation from initial setup through settled placement and retreat.
+\item Add the repository URL: \edit{repository link}, and video reference: \edit{video filename or link}.
+\end{enumerate}
+\section{Conclusion}
+We developed an integrated GP7 simulation that connects robot modelling, full-pose kinematics, smooth motion planning, measured feedback, grasp sequencing and an editable dashboard. The saved records support successful pick-and-place execution in the modified workcell with millimetre-scale final position error. The remaining submission work is to complete the personal and visual evidence, resolve the assignment-coordinate deviation, and quantify orientation throughout carrying if making a full-trajectory verification claim.
+\appendix
+\chapter{Editable Implementation Listings}
+These listings are copied from the project source at report preparation. They make this report self-contained and editable without external source-file dependencies. The main text explains their role; the complete relevant algorithms are included below.
+
+\section{Standard D--H model}
+\begin{lstlisting}[language=Python]
+"""Nominal standard-DH model (mm, degrees), including the flange frame."""
+import numpy as np
+
+# a_i, alpha_i, d_i, theta offset; theta_i = model joint angle + offset.
+DH_TABLE = np.array([
+    [40., -90., 330., 0.],
+    [445., 0., 0., -90.],
+    [40., -90., 0., 0.],
+    [0., 90., 440., 0.],
+    [0., 90., 0., 180.],
+    [0., 0., 67.5, 0.],
+])
+DH_TO_FLANGE = np.array([[0., 1., 0., 0.], [0., 0., 1., 0.],
+                         [1., 0., 0., 0.], [0., 0., 0., 1.]])
+
+
+def dh_frames(angles):
+    """World transforms for DH frames 0..6; z_(i-1) is joint i's axis."""
+    angles = np.asarray(angles, dtype=float)
+    if angles.shape != (6,) or not np.isfinite(angles).all():
+        raise ValueError('Expected six finite angles in degrees')
+    frames = [np.eye(4)]
+    for q, (a, alpha, d, offset) in zip(angles, DH_TABLE):
+        theta, alpha = np.deg2rad([q + offset, alpha])
+        c, s, ca, sa = np.cos(theta), np.sin(theta), np.cos(alpha), np.sin(alpha)
+        A = np.array([[c, -s*ca, s*sa, a*c], [s, c*ca, -c*sa, a*s],
+                      [0., sa, ca, d], [0., 0., 0., 1.]])
+        frames.append(frames[-1] @ A)
+    return frames
+
+
+def dh_fk(angles):
+    """Nominal world-to-Link6 pose; CAD rounded RPY introduces micron offsets."""
+    return dh_frames(angles)[-1] @ DH_TO_FLANGE
+
+\end{lstlisting}
+
+\section{Forward and inverse kinematics}
+\begin{lstlisting}[language=Python]
+"""Shared GP7 forward/inverse kinematics: degrees, millimetres, world frame."""
+
+from .utils import generateH
+from numpy import array, linalg, zeros, eye, max as maxnp, abs as absnp, concatenate, isfinite
+from scipy.spatial.transform import Rotation
+
+
+def _joint_transform(translation_mm, rpy, axis, angle_degrees):
+    """Build a URDF joint transform using millimetres and degrees."""
+    origin = generateH(
+        Rotation.from_euler("xyz", rpy).as_matrix(),
+        translation_mm,
+    )
+    joint_rotation = generateH(
+        Rotation.from_rotvec(
+            array(axis, dtype=float) * angle_degrees,
+            degrees=True,
+        ).as_matrix(),
+        [0.0, 0.0, 0.0],
+    )
+    return origin @ joint_rotation
+
+
+def H01(angle):
+    return _joint_transform(
+        [0.0, 0.0, 190.1],
+        [1.5708, 0.0, 1.5708],
+        [0.0, 1.0, 0.0],
+        angle,
+    )
+
+
+def H12(angle):
+    return _joint_transform(
+        [0.0, 139.9, -40.0],
+        [1.5708, -1.5708, 0.0],
+        [0.0, 1.0, 0.0],
+        angle,
+    )
+
+
+def H23(angle):
+    return _joint_transform(
+        [0.0, 0.0, -445.0],
+        [3.1416, 0.0, 3.1416],
+        [0.0, 1.0, 0.0],
+        angle,
+    )
+
+
+def H34(angle):
+    return _joint_transform(
+        [71.5, 0.0, 40.0],
+        [1.5708, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        angle,
+    )
+
+
+def H45(angle):
+    return _joint_transform(
+        [368.5, 0.0, 0.0],
+        [3.1416, 0.0, 1.5708],
+        [0.0, 0.0, 1.0],
+        angle,
+    )
+
+
+def H56(angle):
+    return _joint_transform(
+        [0.0, 67.5, 0.0],
+        [0.0, 0.0, 1.5708],
+        [1.0, 0.0, 0.0],
+        angle,
+    )
+
+
+def H06(a1, a2, a3, a4, a5, a6):
+    """Return the world-to-Link6 transform in millimetres."""
+    world_to_base = generateH(
+        [[-1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]],
+        [0.0, 0.0, 0.0],
+    )
+    return (
+        world_to_base
+        @ H01(a1)
+        @ H12(a2)
+        @ H23(a3)
+        @ H34(a4)
+        @ H45(a5)
+        @ H56(a6)
+    )
+
+
+def translation_jacobian(joint_angles, step_degrees=1e-4):
+    """Return the 3x6 translational Jacobian in mm/degree.
+
+    ``H06`` uses degrees, so this Jacobian deliberately differentiates with
+    respect to degrees. Multiplying it by joint velocities in degrees/second
+    therefore produces an XYZ velocity in mm/second.
+    """
+    q = array(joint_angles, dtype=float)
+    if q.shape != (6,):
+        raise ValueError("joint_angles must contain exactly 6 values")
+    if not isfinite(q).all():
+        raise ValueError("joint_angles must contain finite numbers")
+    if step_degrees <= 0:
+        raise ValueError("step_degrees must be greater than zero")
+
+    jacobian = zeros((3, 6))
+    for joint in range(6):
+        q_plus = q.copy()
+        q_minus = q.copy()
+        q_plus[joint] += step_degrees
+        q_minus[joint] -= step_degrees
+        p_plus = H06(*q_plus)[:3, 3]
+        p_minus = H06(*q_minus)[:3, 3]
+        jacobian[:, joint] = (
+            (p_plus - p_minus) / (2.0 * step_degrees)
+        )
+
+    return jacobian
+
+
+def joint_to_cartesian_motion(
+        joint_angles,
+        joint_velocity,
+        joint_acceleration,
+        jacobian_step_degrees=1e-4,
+        curvature_step_degrees=0.05):
+    """Convert joint motion to end-effector XYZ velocity and acceleration.
+
+    Inputs use degrees, degrees/second, and degrees/second squared. Returned
+    vectors use mm/second and mm/second squared. The acceleration includes
+    both ``J @ q_ddot`` and the velocity-dependent ``J_dot @ q_dot`` term.
+    """
+    q = array(joint_angles, dtype=float)
+    q_dot = array(joint_velocity, dtype=float)
+    q_ddot = array(joint_acceleration, dtype=float)
+
+    for name, values in (
+            ("joint_angles", q),
+            ("joint_velocity", q_dot),
+            ("joint_acceleration", q_ddot)):
+        if values.shape != (6,):
+            raise ValueError(f"{name} must contain exactly 6 values")
+        if not isfinite(values).all():
+            raise ValueError(f"{name} must contain finite numbers")
+    if curvature_step_degrees <= 0:
+        raise ValueError("curvature_step_degrees must be greater than zero")
+
+    jacobian = translation_jacobian(q, jacobian_step_degrees)
+    xyz_velocity = jacobian @ q_dot
+
+    # J_dot @ q_dot is the second directional derivative of position in the
+    # q_dot direction. Normalising the direction keeps the finite-difference
+    # displacement small and independent of the actual joint speed.
+    maximum_joint_speed = float(maxnp(absnp(q_dot)))
+    if maximum_joint_speed <= 1e-12:
+        velocity_dependent_acceleration = zeros((3,))
+    else:
+        direction = q_dot / maximum_joint_speed
+        q_plus = q + direction * curvature_step_degrees
+        q_minus = q - direction * curvature_step_degrees
+        p = H06(*q)[:3, 3]
+        p_plus = H06(*q_plus)[:3, 3]
+        p_minus = H06(*q_minus)[:3, 3]
+        curvature = (
+            (p_plus - 2.0 * p + p_minus)
+            / curvature_step_degrees**2
+        )
+        velocity_dependent_acceleration = (
+            curvature * maximum_joint_speed**2
+        )
+
+    xyz_acceleration = (
+        jacobian @ q_ddot + velocity_dependent_acceleration
+    )
+    return xyz_velocity, xyz_acceleration
+
+
+def pose_error(q, target):
+    current = H06(q[0], q[1], q[2], q[3], q[4], q[5])
+
+    # Target position minus current position
+    position_error = target[:3, 3] - current[:3, 3]
+
+    # Rotation needed to reach the target orientation
+    rotation_error = Rotation.from_matrix(
+        target[:3, :3] @ current[:3, :3].T
+    ).as_rotvec()
+
+    return concatenate((position_error, rotation_error))
+
+
+def IK(
+        target,
+        initial_angles,
+        max_iterations=300,
+        learning_rate=1.0,
+        max_step_degrees=5.0,
+        position_tolerance=0.1,
+        rotation_tolerance=1e-3,
+        damping=0.1,
+        seed_weight=1.0):
+    """Solve IK using damped least squares.
+
+    Joint angles, finite-difference steps, and joint updates are in degrees.
+    Position values and ``position_tolerance`` are in millimetres, while
+    rotation errors and ``rotation_tolerance`` are in radians. ``seed_weight``
+    selects the valid IK branch nearest to ``initial_angles``; use the robot's
+    current joint state as ``initial_angles`` during motion planning.
+    """
+    if learning_rate <= 0:
+        raise ValueError("learning_rate must be greater than zero")
+    if max_step_degrees <= 0:
+        raise ValueError("max_step_degrees must be greater than zero")
+    if position_tolerance <= 0 or rotation_tolerance <= 0:
+        raise ValueError("IK tolerances must be greater than zero")
+    if damping <= 0:
+        raise ValueError("damping must be greater than zero")
+    if seed_weight < 0:
+        raise ValueError("seed_weight cannot be negative")
+
+    q = array(initial_angles, dtype=float).copy()
+    preferred_q = q.copy()
+    epsilon_degrees = 1e-4
+
+    # Scaling by the requested tolerances prevents position errors in mm from
+    # overwhelming rotation errors in radians in the least-squares solve.
+    error_scale = array([
+        1.0 / position_tolerance,
+        1.0 / position_tolerance,
+        1.0 / position_tolerance,
+        1.0 / rotation_tolerance,
+        1.0 / rotation_tolerance,
+        1.0 / rotation_tolerance,
+    ])
+    current_damping = damping
+    identity = eye(6)
+
+    for _ in range(max_iterations):
+        error = pose_error(q, target)
+
+        # Stop when both configured pose tolerances are satisfied.
+        if (linalg.norm(error[:3]) <= position_tolerance
+                and linalg.norm(error[3:]) <= rotation_tolerance):
+            return q, True
+
+        scaled_error = error * error_scale
+
+        # Numerical Jacobian of the ERROR:
+        # measure how each joint changes the error.
+        J = zeros((6, 6))
+        for i in range(6):
+            perturbed_q = q.copy()
+            perturbed_q[i] += epsilon_degrees
+            J[:, i] = (
+                pose_error(perturbed_q, target) - error
+            ) * error_scale / epsilon_degrees
+
+        # Keep the solution on the branch nearest the supplied initial joint
+        # state. Fade this secondary objective near the target so it cannot
+        # hold the solver just outside the requested pose tolerance.
+        scaled_error_norm = linalg.norm(scaled_error)
+        effective_seed_weight = seed_weight * min(
+            1.0,
+            scaled_error_norm / 100.0,
+        )
+        seed_delta = q - preferred_q
+        seed_weight_squared = effective_seed_weight**2
+
+        # Damped least-squares correction. Expanding the augmented least-
+        # squares system directly avoids allocating a 12-by-6 matrix every
+        # iteration.
+        dq = -linalg.solve(
+            J.T @ J
+            + (seed_weight_squared + current_damping**2) * identity,
+            J.T @ scaled_error + seed_weight_squared * seed_delta,
+        )
+
+        # q is measured in degrees, so the update limit is also in degrees.
+        dq *= min(
+            1.0,
+            max_step_degrees / max(maxnp(absnp(dq)), 1e-12),
+        )
+
+        # A Jacobian is only a local approximation. Backtracking prevents a
+        # large-distance iteration from accepting a step that increases the
+        # actual pose error.
+        current_cost = (
+            scaled_error @ scaled_error
+            + seed_weight_squared * (seed_delta @ seed_delta)
+        )
+        step_scale = learning_rate
+        accepted = False
+
+        while step_scale >= 1e-4:
+            candidate_q = q + step_scale * dq
+            candidate_pose_error = pose_error(candidate_q, target) * error_scale
+            candidate_seed_delta = candidate_q - preferred_q
+            candidate_cost = (
+                candidate_pose_error @ candidate_pose_error
+                + seed_weight_squared
+                * (candidate_seed_delta @ candidate_seed_delta)
+            )
+
+            if candidate_cost < current_cost:
+                q = candidate_q
+                current_damping = max(damping, current_damping * 0.5)
+                accepted = True
+                break
+
+            step_scale *= 0.5
+
+        if not accepted:
+            # Near a singularity, a larger damping value produces a smaller,
+            # safer correction on the next iteration.
+            current_damping = min(current_damping * 10.0, 1e6)
+
+    return q, False
+
+\end{lstlisting}
+
+\section{Trajectory generation and velocity shaping}
+\begin{lstlisting}[language=Python]
+"""Shared joint and Cartesian trajectory generation."""
+
+from numpy import (
+    array,
+    arange,
+    abs,
+    max,
+    maximum,
+    sqrt,
+    deg2rad,
+    rad2deg,
+    gradient,
+    unwrap,
+    eye,
+)
+
+
+def s_curve(
+        start,
+        end,
+        v_max=6.28,
+        a_max=6.28,
+        isdegrees=False,
+        dt=0.01,
+        move_linear=False):
+    """
+    Return a time-sampled MoveJ or MoveL trajectory.
+
+    Parameters:
+        start : six start joint angles in degrees
+        end : six end joint angles in degrees
+        v_max : maximum velocity of a joint
+        a_max : maximum acceleration of a joint
+        isdegrees : whether v_max and a_max are supplied in degrees
+        dt : time between trajectory samples
+        move_linear : False selects MoveJ; True selects Cartesian MoveL
+
+    MoveL uses ``H06`` and ``IK``, whose joint-angle unit is degrees. Its
+    returned position, velocity, and acceleration are therefore degrees,
+    degrees/second, and degrees/second squared respectively.
+    """
+    start = array(start, dtype=float)
+    end = array(end, dtype=float)
+    if start.shape != (6,) or end.shape != (6,):
+        raise ValueError("start and end must each contain exactly 6 angles")
+    if dt <= 0:
+        raise ValueError("dt must be greater than zero")
+
+    # The robot FK/IK uses degrees. Convert radian limits when necessary so
+    # trajectory positions and their time derivatives remain unit-consistent.
+    if not isdegrees:
+        v_max = rad2deg(v_max)
+        a_max = rad2deg(a_max)
+    T = calculate_move_time(start, end, v_max, a_max)
+    print(f"Max velocity : {round(v_max, 3)} deg/s")
+    print(f"Max acceleration : {round(a_max, 3)} deg/s^2")
+    print(f"Movement time : {round(T, 3)} s")
+    curve = _s_curve(start, end, T, dt, move_linear)
+    if move_linear and len(curve) > 2:
+        # Cartesian IK can demand higher joint rates than endpoint displacement
+        # predicts. Stretch the whole path, retaining its constant orientation.
+        import numpy as np
+        velocities = np.array([state['velocity'] for state in curve])
+        accelerations = np.array([state['acceleration'] for state in curve])
+        scale = float(np.maximum(1.0, np.maximum(
+            np.max(np.abs(velocities) / v_max),
+            np.sqrt(np.max(np.abs(accelerations) / a_max)))))
+        if scale > 1.0:
+            times = np.array([state['time'] for state in curve]) * scale
+            positions = np.array([state['position'] for state in curve])
+            new_times = np.arange(0.0, times[-1], dt)
+            new_times = np.append(new_times, times[-1])
+            positions = np.column_stack([
+                np.interp(new_times, times, positions[:, j]) for j in range(6)])
+            velocities = np.gradient(positions, new_times, axis=0)
+            accelerations = np.gradient(velocities, new_times, axis=0)
+            curve = [dict(time=t, position=p, velocity=v, acceleration=a)
+                     for t, p, v, a in zip(new_times, positions, velocities, accelerations)]
+    return curve
+
+
+def _s_curve(start, end, T, dt=0.01, move_linear=False):
+    if move_linear:
+        return _move_l_curve(start, end, T, dt)
+    return _move_j_curve(start, end, T, dt)
+
+
+def _profile_samples(T, dt):
+    """Return time and quintic position/velocity/acceleration scale values."""
+    if T <= 0:
+        return [(0.0, 0.0, 0.0, 0.0)]
+
+    samples = []
+    for t in arange(0, T + dt, dt):
+        t = min(float(t), float(T))
+        tau = t / T
+        s = 10*tau**3 - 15*tau**4 + 6*tau**5
+        s_dot = (30*tau**2 - 60*tau**3 + 30*tau**4) / T
+        s_ddot = (60*tau - 180*tau**2 + 120*tau**3) / T**2
+        samples.append((t, s, s_dot, s_ddot))
+    return samples
+
+
+def _move_j_curve(start, end, T, dt=0.01):
+    start = array(start)
+    end = array(end)
+
+    dq = end - start
+    trad = []
+
+    for t, s, s_dot, s_ddot in _profile_samples(T, dt):
+        q = start + dq * s
+        q_dot = dq * s_dot
+        q_ddot = dq * s_ddot
+
+        trad.append({
+            "time": t,
+            "position": q,
+            "velocity": q_dot,
+            "acceleration": q_ddot
+        })
+
+    return trad
+
+
+def _move_l_curve(start, end, T, dt=0.01):
+    """Generate a straight tool-space path and solve its joint trajectory."""
+    # Lazy imports keep the standalone MoveJ profile independent of the robot
+    # model and avoid an import cycle during module initialisation.
+    from scipy.spatial.transform import Rotation
+    from .Homogenous import H06, IK
+
+    start_transform = H06(*start)
+    end_transform = H06(*end)
+    start_xyz = start_transform[:3, 3]
+    xyz_delta = end_transform[:3, 3] - start_xyz
+    start_rotation = start_transform[:3, :3]
+    relative_rotation_vector = Rotation.from_matrix(
+        start_rotation.T @ end_transform[:3, :3]
+    ).as_rotvec()
+
+    samples = _profile_samples(T, dt)
+    times = array([sample[0] for sample in samples])
+    joint_positions = []
+    previous_angles = array(start, dtype=float)
+
+    for index, (_, s, _, _) in enumerate(samples):
+        if index == 0:
+            joint_angles = array(start, dtype=float)
+        elif index == len(samples) - 1:
+            joint_angles = array(end, dtype=float)
+        else:
+            target = eye(4)
+            target[:3, 3] = start_xyz + xyz_delta * s
+            target[:3, :3] = start_rotation @ Rotation.from_rotvec(
+                relative_rotation_vector * s
+            ).as_matrix()
+
+            # Cartesian orientation changes can pass close to a wrist
+            # singularity.  The endpoint solve is usually quick, but the
+            # small intermediate rotations need more iterations to leave the
+            # singular configuration while preserving the tool position.
+            joint_angles, converged = IK(
+                target,
+                previous_angles,
+                max_iterations=1000,
+            )
+            if not converged:
+                raise RuntimeError(
+                    "Target pose is reachable, but the straight-line path "
+                    "is not reachable: inverse kinematics failed at "
+                    f"t={times[index]:.4f} s (path fraction {s:.4f})"
+                )
+
+        joint_positions.append(joint_angles)
+        previous_angles = joint_angles
+
+    joint_positions = array(joint_positions)
+    if len(joint_positions) == 1:
+        joint_velocities = array([[0.0] * 6])
+        joint_accelerations = array([[0.0] * 6])
+    else:
+        # Remove equivalent +/-360-degree jumps before differentiating.
+        continuous_positions = rad2deg(
+            unwrap(deg2rad(joint_positions), axis=0)
+        )
+        joint_positions = continuous_positions
+        edge_order = 2 if len(joint_positions) >= 3 else 1
+        joint_velocities = gradient(
+            continuous_positions,
+            times,
+            axis=0,
+            edge_order=edge_order,
+        )
+        joint_accelerations = gradient(
+            joint_velocities,
+            times,
+            axis=0,
+            edge_order=edge_order,
+        )
+
+        # The quintic path has exactly zero endpoint velocity/acceleration.
+        joint_velocities[[0, -1]] = 0.0
+        joint_accelerations[[0, -1]] = 0.0
+
+    return [
+        {
+            "time": time,
+            "position": position,
+            "velocity": velocity,
+            "acceleration": acceleration,
+        }
+        for time, position, velocity, acceleration in zip(
+            times,
+            joint_positions,
+            joint_velocities,
+            joint_accelerations,
+        )
+    ]
+
+def calculate_move_time(q_start, q_end, v_max, a_max):
+    q_start = array(q_start)
+    q_end = array(q_end)
+
+    v_max = array(v_max)
+    a_max = array(a_max)
+
+    dq = abs(q_end - q_start)
+
+    # Velocity constraint
+    T_velocity = 1.875 * dq / v_max
+
+    # Acceleration constraint
+    T_acceleration = sqrt(
+        5.7735 * dq / a_max
+    )
+
+    T = max(
+        maximum(
+            T_velocity,
+            T_acceleration
+        )
+    )
+
+    return T
+
+\end{lstlisting}
+
+\section{Motion service and measured execution}
+\begin{lstlisting}[language=Python]
+import time
+import xml.etree.ElementTree as ET
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
+from std_msgs.msg import Bool, Float64, String
+from sensor_msgs.msg import JointState
+from control_dashboard.srv import MoveToPose
+from control_dashboard.msg import MoveProgress
+from visualization_msgs.msg import Marker
+from robot_kinematics import s_curve, generateH, IK, H06, joint_to_cartesian_motion
+from robot_kinematics.conventions import convention_from_node
+from numpy import array, isfinite, linalg
+from scipy.spatial.transform import Rotation
+
+class TurnNode(Node):
+    def __init__(self, **kwargs):
+        super().__init__("turn_node", **kwargs)
+        self.joint_convention = convention_from_node(self)
+        self.show_plot = self.declare_parameter('show_plot', False).value
+        self.current_angles = None
+        self.feedback_time = 0.0
+        self.joint_limits = None
+        self.target = None
+        self.active = False
+        self.joint_pos = []
+        self.joint_posLen = 0
+        self.count = 0
+        self.settle_started = None
+        self.gripper_action = 'keep'
+        self.gripper_started = None
+        self.attached = False
+        self.gripper_feedback_time = 0.0
+        self.carrying = False
+        self.gripper_pub = self.create_publisher(Bool, '/gripper/close', 10)
+        self.gripper_sub = self.create_subscription(
+            Bool, '/gripper/attached', self.on_gripper_feedback, 10)
+
+        self.joints = {}
+
+        for i in range(1,7):
+            self.joints[f"j{i}"] = self.create_publisher(Float64, f"/robot/joint{i}/command", 10)
+
+        marker_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self.point_pub = self.create_publisher(
+            Marker,
+            "/vis/point",
+            marker_qos,
+        )
+
+        self.target_marker = Marker()
+        # H06/IK coordinates are expressed in the workcell world frame.
+        self.target_marker.header.frame_id = "world"
+        self.target_marker.ns = "robot_motion"
+        self.target_marker.id = 0
+        self.target_marker.type = Marker.SPHERE
+        self.target_marker.action = Marker.ADD
+        self.target_marker.pose.orientation.w = 1.0
+        self.target_marker.scale.x = 0.05
+        self.target_marker.scale.y = 0.05
+        self.target_marker.scale.z = 0.05
+        self.target_marker.color.r = 1.0
+        self.target_marker.color.g = 0.15
+        self.target_marker.color.b = 0.05
+        self.target_marker.color.a = 1.0
+        self.marker_timer = self.create_timer(1.0, self.publish_target_marker)
+        self.progress_pub = self.create_publisher(MoveProgress, '/robot/move_progress', marker_qos)
+        self.feedback_sub = self.create_subscription(
+            JointState, '/joint_states', self.on_joint_states, qos_profile_sensor_data)
+        self.description_sub = self.create_subscription(
+            String, '/robot_description', self.on_robot_description, marker_qos)
+        self.move_service = self.create_service(MoveToPose, '/robot/move_to_pose', self.move_to_pose)
+
+        timer_period = 0.01
+        self.timer = self.create_timer(timer_period, self.timer_callback)
+        self.report('idle', 0.0, 'Ready for a target; waiting for measured joints and robot description')
+        self.get_logger().info('Ready: /robot/move_to_pose')
+
+    def on_joint_states(self, msg):
+        try:
+            self.current_angles = self.joint_convention.ordered_positions(msg.name, msg.position)
+            self.feedback_time = time.monotonic()
+        except ValueError as error:
+            self.get_logger().warning(str(error), throttle_duration_sec=5.0)
+
+    def on_robot_description(self, msg):
+        try:
+            joints = {joint.get('name'): joint for joint in ET.fromstring(msg.data).findall('joint')}
+            self.joint_limits = array([
+                [float(joints[name].find('limit').get('lower')),
+                 float(joints[name].find('limit').get('upper'))]
+                for name in self.joint_convention.names])
+        except (ET.ParseError, KeyError, AttributeError, TypeError, ValueError) as error:
+            self.joint_limits = None
+            self.get_logger().error(f'Cannot read joint limits: {error}')
+
+    def report(self, state, percent, message):
+        self.progress_pub.publish(MoveProgress(state=state, percent=float(percent), message=message))
+
+    def on_gripper_feedback(self, msg):
+        self.attached = msg.data
+        self.gripper_feedback_time = time.monotonic()
+
+    def move_to_pose(self, request, response):
+        if self.active:
+            response.message = 'Robot is busy; wait for the current move to finish'
+            return response
+        if self.current_angles is None or time.monotonic() - self.feedback_time > 2.0:
+            response.message = 'No fresh /joint_states feedback'
+            return response
+        if self.joint_limits is None:
+            response.message = 'Waiting for joint limits on /robot_description'
+            return response
+        p, q = request.target.position, request.target.orientation
+        try:
+            gripper_action = request.gripper_action or 'keep'
+            if gripper_action not in ('keep', 'grab', 'release'):
+                raise ValueError('Gripper action must be keep, grab, or release')
+            if gripper_action != 'keep' and time.monotonic() - self.gripper_feedback_time > 2:
+                raise ValueError('No fresh /gripper/attached feedback')
+            xyz = array([p.x, p.y, p.z]) * 1000.0
+            quaternion = array([q.x, q.y, q.z, q.w])
+            if not isfinite(xyz).all() or not isfinite(quaternion).all():
+                raise ValueError('Target pose must contain finite numbers')
+            if linalg.norm(quaternion) < 1e-8:
+                raise ValueError('Target orientation quaternion must be nonzero')
+            end = generateH(Rotation.from_quat(quaternion).as_matrix(), xyz)
+            self.report('planning', 0.0, 'Calculating trajectory')
+            self.plan_move(end, request.move_linear)
+        except (ValueError, RuntimeError, linalg.LinAlgError) as error:
+            response.message = str(error)
+            self.report('failed', 0.0, response.message)
+            return response
+        except Exception as error:
+            # A malformed or numerically difficult request must fail only the
+            # service call, not terminate the long-running ROS node.
+            response.message = (
+                f'Unexpected planning error: {type(error).__name__}: {error}'
+            )
+            self.get_logger().error(response.message)
+            self.report('failed', 0.0, response.message)
+            return response
+
+        self.target = end
+        self.target_marker.pose = request.target
+        q = self.target_marker.pose.orientation
+        q.x, q.y, q.z, q.w = map(float, Rotation.from_matrix(end[:3, :3]).as_quat())
+        self.publish_target_marker()
+        self.active = True
+        self.move_started = time.monotonic()
+        self.settle_started = None
+        self.gripper_action = gripper_action
+        self.gripper_started = None
+        self.carrying = self.attached
+        response.accepted = True
+        response.message = 'Move accepted; follow /robot/move_progress for completion'
+        self.report('moving', 0.0, 'Executing trajectory')
+        return response
+
+    def plan_move(self, end, move_linear):
+        start_angles = self.joint_convention.ros_to_model(self.current_angles)
+        ik, converged = IK(end, start_angles)
+        if not converged:
+            raise RuntimeError(
+                'Target pose is not reachable: inverse kinematics did not converge'
+            )
+        target_position = self.joint_convention.model_to_ros(ik)
+        if (not isfinite(target_position).all()
+                or (target_position < self.joint_limits[:, 0]).any()
+                or (target_position > self.joint_limits[:, 1]).any()):
+            raise ValueError(
+                'Target pose is not reachable within the robot joint limits'
+            )
+        curve = s_curve(start_angles, ik, 45, 45, True, move_linear=move_linear)
+
+        self.joint_pos = []
+        self.velocity = []
+        self.acc = []
+        self.position = []
+        for state in curve:
+            joint_position = state["position"]
+            self.joint_pos.append(self.joint_convention.model_to_ros(joint_position))
+            if self.show_plot:
+                xyz_velocity, xyz_acceleration = joint_to_cartesian_motion(
+                    joint_position, state['velocity'], state['acceleration'])
+                self.position.append(H06(*joint_position)[:3, 3])
+                self.velocity.append(xyz_velocity)
+                self.acc.append(xyz_acceleration)
+        positions = array(self.joint_pos)
+        if (not isfinite(positions).all()
+                or (positions < self.joint_limits[:, 0]).any()
+                or (positions > self.joint_limits[:, 1]).any()):
+            raise ValueError('Planned trajectory exceeds URDF joint limits')
+        if self.show_plot:
+            import matplotlib.pyplot as plt
+            from .plotter import plot_velocity_and_acceleration
+            plot_velocity_and_acceleration(self.position, self.velocity, self.acc)
+            plt.show(block=False)
+        self.joint_posLen = len(self.joint_pos)
+        self.count = 0
+
+    def publish_target_marker(self):
+        if self.target is None:
+            return
+        self.target_marker.header.stamp = self.get_clock().now().to_msg()
+        self.point_pub.publish(self.target_marker)
+
+    def timer_callback(self):
+        if not self.active:
+            return
+        if time.monotonic() - self.feedback_time > 2.0:
+            # Planning uses this executor; allow queued feedback to arrive first.
+            if self.count == 0 and time.monotonic() - self.move_started < 2.0:
+                return
+            self.active = False
+            self.report('failed', 99.0 * self.count / self.joint_posLen, 'Joint feedback lost')
+            return
+        if self.gripper_started is not None:
+            self.tick_gripper()
+            return
+        if self.carrying and (not self.attached or
+                              time.monotonic() - self.gripper_feedback_time > 2.0):
+            if self.count == 0 and time.monotonic() - self.move_started < 2.0:
+                return
+            self.active = False
+            self.report('failed', 99.0 * self.count / self.joint_posLen,
+                        'Grasp lost while carrying; waypoint stopped')
+            return
+        if self.count < self.joint_posLen:
+            pos = self.joint_pos[self.count]
+            for i in range(1,7):
+                msg = Float64()
+                msg.data = float(pos[i-1])
+                self.joints[f"j{i}"].publish(msg)
+            self.count += 1
+            if self.count % 10 == 0:
+                self.report('moving', 99.0 * self.count / self.joint_posLen, 'Executing trajectory')
+            return
+        if self.settle_started is None:
+            self.settle_started = time.monotonic()
+            self.report('settling', 99.0, 'Waiting for measured target position and orientation')
+        measured = H06(*self.joint_convention.ros_to_model(self.current_angles))
+        position_error = linalg.norm(measured[:3, 3] - self.target[:3, 3])
+        orientation_error = Rotation.from_matrix(
+            self.target[:3, :3] @ measured[:3, :3].T).magnitude()
+        if position_error < 5.0 and orientation_error < 0.03:
+            if self.gripper_action == 'keep':
+                self.active = False
+                self.report('succeeded', 100.0, 'Measured target reached (within 5 mm and 0.03 rad)')
+            else:
+                self.gripper_started = time.monotonic()
+                self.report('grabbing' if self.gripper_action == 'grab' else 'releasing',
+                            99.0, 'Target reached; waiting for gripper acknowledgement')
+                self.tick_gripper()
+        elif time.monotonic() - self.settle_started > 10.0:
+            self.active = False
+            self.report('failed', 99.0, 'Timed out waiting for measured target pose')
+
+    def tick_gripper(self):
+        now = time.monotonic()
+        want = self.gripper_action == 'grab'
+        self.gripper_pub.publish(Bool(data=want))
+        elapsed = now - self.gripper_started
+        if now - self.gripper_feedback_time > 2.0 or elapsed > 10.0:
+            self.active = False
+            self.report('failed', 99.0, 'Gripper feedback lost' if
+                        now - self.gripper_feedback_time > 2.0 else
+                        'Timed out waiting for gripper acknowledgement')
+        elif (self.gripper_feedback_time > self.gripper_started and
+              self.attached == want and (want or elapsed >= 0.8)):
+            self.active = False
+            self.report('succeeded', 100.0, 'Waypoint reached; object grabbed' if want else
+                        'Waypoint reached; object released and jaws retracted')
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = None
+    try:
+        node = TurnNode()
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if node is not None:
+            node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("Exited with code 0")
+
+\end{lstlisting}
+\chapter{Recorded Validation Output}
+\begin{lstlisting}
+PASS Approach: succeeded: 100% -- Measured target reached (within 5 mm and 0.03 rad)
+PASS Descend and grab: succeeded: 100% -- Waypoint reached; object grabbed
+PASS Lift: succeeded: 100% -- Measured target reached (within 5 mm and 0.03 rad)
+PASS Transfer: succeeded: 100% -- Measured target reached (within 5 mm and 0.03 rad)
+PASS Place and release: succeeded: 100% -- Waypoint reached; object released and jaws retracted
+PASS Retreat: succeeded: 100% -- Measured target reached (within 5 mm and 0.03 rad)
+PASS final measured Box B: (0.4978, 0.5009, 0.2250), error=0.00239 m
+\end{lstlisting}
+\begin{lstlisting}
+PASS one Execute motion plan click: Motion plan completed: 6 waypoints
+PASS final measured Box B: (0.4980, 0.5009, 0.2250), error=0.00214 m
+\end{lstlisting}
+\chapter{Project Sources}
+We used the supplied \texttt{Task\_sheet.pdf} for assignment requirements. Implementation evidence comes from the URDF, the source listings in Appendix A, the gripper plugin, dashboard interfaces, and the project documentation. Reported placement results come from the two log files reproduced in Appendix B. Manufacturer speed specifications and new physical measurements were not supplied as verified evidence for this report.
+\end{document}
