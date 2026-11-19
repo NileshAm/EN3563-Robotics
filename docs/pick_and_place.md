@@ -35,15 +35,20 @@ The robot base remains at the world origin, with its existing 180° mounting yaw
 
 The parallel gripper has a blue motor housing, metal fingers, and dark gripping
 pads. Two independent prismatic joints close symmetrically around the 50 mm
-cube: the open collision-surface gap is 90 mm and the closed gap is 50 mm.
-Each finger has 22 mm travel, a 5 N force limit, and a damped position servo.
+cube: the open collision-surface gap is 90 mm. The servo targets a 46 mm gap,
+so a 50 mm cube blocks the jaws and develops sustained squeezing force.
+Each finger has 22 mm travel, a 7.5 N force limit, and a damped position servo.
+At the nominal cube width the servo provides about 4.5 N per finger.
 The fingers extend 163 mm from the flange, leaving 7 mm ground clearance at
 the pickup pose. The `tool_tip` frame at 120 mm marks the box's top surface.
 
-`/gripper/close` (`std_msgs/Bool`) drives both fingers. Once the jaws have closed
-and the box is correctly positioned and aligned, the plugin creates a fixed
-joint to stabilize the grasp. This is an assisted simulated grasp, not a purely
-friction-based contact model. Opening releases the joint and retracts the jaws;
+`/gripper/close` (`std_msgs/Bool`) drives both fingers. The box is held entirely
+by collision friction (coefficient 2.0 on the fingers and box), with no temporary
+joint or pose constraint. Contact sensors confirm that both fingers touch Box B
+for at least 100 ms before `/gripper/attached` reports true. This legacy topic
+now indicates bilateral contact, not an attachment. A 150 ms grace period
+filters brief contact interruptions; sustained loss or opening clears feedback.
+Opening removes squeezing force and retracts the jaws;
 the sequence waits 0.8 seconds before retreating. Joint-state feedback includes
 both finger joints, so their motion is also visible in RViz.
 
@@ -148,13 +153,22 @@ During carrying R_start and R_end are equal (up to tracking error), so the
 planned orientation stays constant. IK uses the previous sample as its next
 seed. Joint commands run at 100 Hz; nominal limits are 45 deg/s and 45 deg/s².
 Cartesian paths are slowed when sampled joint derivatives exceed these limits.
+Joint speed and acceleration limits are 45 degrees/s and 45 degrees/s²,
+including while carrying a box.
 The six existing Gazebo PID controllers track the position samples with joint
 feedback. This is not a general obstacle planner; the fixed scene uses explicit
 vertical approach/lift waypoints and an elevated transfer.
 
 ## Validation and submission
 
-A real Gazebo run driven through the dashboard Move button completed approach,
+With the earlier reduced carrying limits (15 degrees/s and 10 degrees/s²),
+the friction-only implementation completed a separate headless Gazebo sequence:
+approach, grasp, lift, transfer, place, release, and retreat. The final check
+confirmed Box B upright on Box A at (0.5, 0.5, 0.225) m using the existing
+10 mm position and 0.08 rad orientation tolerances. The motion-service
+regression suite passed all nine tests.
+
+Before the friction-only change, a real Gazebo run driven through the dashboard Move button completed approach,
 grasp, lift, transfer, release and retreat. A separate check verified placement.
 The completion log is saved in
 `docs/pick_place_validation.log`. Kinematics, motion-service and monitor
@@ -168,5 +182,5 @@ the screen recording are not supplied by this implementation.
 Implementation references: `robot_motion/pick_place.py`,
 `robot_kinematics/Homogenous.py`, `robot_kinematics/velocityProfile.py`,
 `robot_kinematics/dh.py`, and `my_robot_description/plugins/gripper.cpp`.
-The grasp uses Gazebo's [DetachableJoint component](https://gazebosim.org/api/sim/8/namespacegz_1_1sim_1_1components.html),
-with proximity gating added by this project.
+The grasp uses Gazebo collision friction and contact sensors. The earlier
+validation log describes the previous assisted grasp implementation.

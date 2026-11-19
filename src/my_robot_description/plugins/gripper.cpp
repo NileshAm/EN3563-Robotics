@@ -1,4 +1,4 @@
-// Motorized parallel jaws with proximity-gated ideal grasp assistance.
+// Force-driven parallel jaws; objects are held only by collision friction.
 #include <atomic>
 #include <algorithm>
 #include <gz/sim/components/JointPosition.hh>
@@ -8,7 +8,9 @@
 #include <gz/sim/System.hh>
 #include <gz/sim/Model.hh>
 #include <gz/sim/Util.hh>
-#include <gz/sim/components/DetachableJoint.hh>
+#include <gz/sim/components/ContactSensorData.hh>
+#include <gz/sim/components/ParentEntity.hh>
+#include <gz/sim/components/Collision.hh>
 #include <gz/sim/components/Model.hh>
 #include <gz/sim/components/Name.hh>
 #include <gz/transport/Node.hh>
@@ -25,7 +27,11 @@ class Gripper : public gz::sim::System,
   gz::transport::Node node;
   gz::transport::Node::Publisher statePub, posePub;
   std::atomic<bool> close{false};
-  gz::sim::Entity model{}, joint{gz::sim::kNullEntity};
+  gz::sim::Entity model{};
+  std::chrono::steady_clock::duration contactSince{};
+  std::chrono::steady_clock::duration lastContact{};
+  bool contacting{false};
+  bool grasped{false};
   std::chrono::steady_clock::duration lastPublish{};
 public:
   void Configure(const gz::sim::Entity &entity,
@@ -54,8 +60,9 @@ public:
       const double q = pos && !pos->Data().empty() ? pos->Data()[0] : 0.0;
       const double v = vel && !vel->Data().empty() ? vel->Data()[0] : 0.0;
       jawsClosed = jawsClosed && q > 0.017;
-      const double target = close ? 0.020 : 0.0;
-      const double force = std::clamp(300.0 * (target - q) - 3.0 * v, -5.0, 5.0);
+      // 2 mm overtravel maintains ~4.5 N per finger against a 50 mm cube.
+      const double target = close ? 0.022 : 0.0;
+      const double force = std::clamp(2250.0 * (target - q) - 10.0 * v, -7.5, 7.5);
       auto cmd = ecm.Component<gz::sim::components::JointForceCmd>(finger);
       if (cmd) cmd->Data() = {force};
       else ecm.CreateComponent(finger, gz::sim::components::JointForceCmd({force}));
@@ -67,27 +74,50 @@ public:
     const auto child = gz::sim::Model(cube).LinkByName(ecm, "link");
     if (!child) return;
     const auto boxPose = gz::sim::worldPose(child, ecm);
-    const auto flangePose = gz::sim::worldPose(flange, ecm);
-    const auto tip = flangePose.Pos() + flangePose.Rot().RotateVector({0.12, 0, 0});
-    const auto top = boxPose.Pos() + boxPose.Rot().RotateVector({0, 0, 0.025});
-    if (close && jawsClosed && !joint && tip.Distance(top) < 0.008 &&
-        flangePose.Rot().RotateVector({1, 0, 0}).Dot(
-          boxPose.Rot().RotateVector({0, 0, -1})) > 0.995)
+    const auto boxCollision = ecm.EntityByComponents(
+      gz::sim::components::Collision(), gz::sim::components::ParentEntity(child));
+    const auto left = gz::sim::Model(model).LinkByName(ecm, "left_finger");
+    const auto right = gz::sim::Model(model).LinkByName(ecm, "right_finger");
+    bool leftContact = false, rightContact = false;
+    ecm.Each<gz::sim::components::ContactSensorData,
+             gz::sim::components::ParentEntity>(
+      [&](const gz::sim::Entity &, const auto *data, const auto *parent)
+      {
+        for (const auto &contact : data->Data().contact())
+        {
+          if (boxCollision && (contact.collision1().id() == boxCollision ||
+                               contact.collision2().id() == boxCollision))
+          {
+            if (parent->Data() == left) leftContact = true;
+            if (parent->Data() == right) rightContact = true;
+          }
+        }
+        return true;
+      });
+    const bool bilateral = close && jawsClosed && leftContact && rightContact;
+    if (!close || info.simTime < lastContact) grasped = false;
+    if (!bilateral || info.simTime < contactSince) contacting = false;
+    if (bilateral && !contacting)
     {
-      joint = ecm.CreateEntity();
-      ecm.CreateComponent(joint, gz::sim::components::DetachableJoint(
-        {flange, child, "fixed"}));
+      contactSince = info.simTime;
+      contacting = true;
     }
-    if (!close && joint)
+    if (bilateral)
     {
-      ecm.RequestRemoveEntity(joint);
-      joint = gz::sim::kNullEntity;
+      lastContact = info.simTime;
+      if (info.simTime - contactSince >= std::chrono::milliseconds(100))
+        grasped = true;
     }
+    // Contact solvers can briefly alternate which finger reports contact.
+    // Opening clears feedback immediately; sustained loss clears it in 150 ms.
+    if (!bilateral && info.simTime - lastContact >= std::chrono::milliseconds(150))
+      grasped = false;
     if (info.simTime < lastPublish) lastPublish = info.simTime;
     if (info.simTime - lastPublish >= std::chrono::milliseconds(20))
     {
       gz::msgs::Boolean state;
-      state.set_data(joint != gz::sim::kNullEntity);
+      // Legacy topic name: debounced bilateral contact, never a fixed joint.
+      state.set_data(grasped);
       statePub.Publish(state);
       gz::msgs::Pose pose;
       gz::msgs::Set(&pose, boxPose);

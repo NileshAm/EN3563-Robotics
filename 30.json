@@ -1,0 +1,93 @@
+[
+  {
+    "name": "Approach",
+    "pose": [
+      -300.0,
+      -200.0,
+      470.0,
+      0.0,
+      90.0,
+      0.0
+    ],
+    "linear": false,
+    "gripper": "keep"
+  },
+  {
+    "name": "Descend and grab",
+    "pose": [
+      -300.0,
+      -200.0,
+      170.0,
+      0.0,
+      90.0,
+      0.0
+    ],
+    "linear": true,
+    "gripper": "grab"
+  },
+  {
+    "name": "Lift",
+    "pose": [
+      -300.0,
+      -200.0,
+      470.0,
+      0.0,
+      90.0,
+      0.0
+    ],
+    "linear": true,
+    "gripper": "keep"
+  },
+  {
+    "name": "Transfer",
+    "pose": [
+      500.0,
+      500.0,
+      470.0,
+      0.0,
+      90.0,
+      0.0
+    ],
+    "linear": false,
+    "gripper": "keep"
+  },
+  {
+    "name": "Transfer",
+    "pose": [
+      500.0,
+      0.0,
+      800.0,
+      0.0,
+      90.0,
+      0.0
+    ],
+    "linear": true,
+    "gripper": "keep"
+  },
+  {
+    "name": "Place and release",
+    "pose": [
+      500,
+      500,
+      372,
+      0,
+      90,
+      0
+    ],
+    "linear": true,
+    "gripper": "release"
+  },
+  {
+    "name": "Retreat",
+    "pose": [
+      500,
+      500,
+      470,
+      0,
+      90,
+      0
+    ],
+    "linear": true,
+    "gripper": "keep"
+  }
+]

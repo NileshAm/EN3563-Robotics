@@ -425,7 +425,7 @@
   <joint name="left_finger_joint" type="prismatic">
     <parent link="gripper_body"/><child link="left_finger"/>
     <origin xyz="0 0.05 0"/><axis xyz="0 -1 0"/>
-    <limit lower="0" upper="0.022" effort="5" velocity="0.04"/>
+    <limit lower="0" upper="0.022" effort="7.5" velocity="0.04"/>
     <dynamics damping="1" friction="0.05"/>
   </joint>
   <link name="right_finger">
@@ -439,10 +439,24 @@
   <joint name="right_finger_joint" type="prismatic">
     <parent link="gripper_body"/><child link="right_finger"/>
     <origin xyz="0 -0.05 0"/><axis xyz="0 1 0"/>
-    <limit lower="0" upper="0.022" effort="5" velocity="0.04"/>
+    <limit lower="0" upper="0.022" effort="7.5" velocity="0.04"/>
     <dynamics damping="1" friction="0.05"/>
   </joint>
   <link name="tool_tip"/>
+  <gazebo reference="left_finger">
+    <mu1>2.0</mu1><mu2>2.0</mu2>
+    <sensor name="left_grip_contact" type="contact">
+      <always_on>true</always_on><update_rate>1000</update_rate>
+      <contact><collision>left_finger_collision</collision></contact>
+    </sensor>
+  </gazebo>
+  <gazebo reference="right_finger">
+    <mu1>2.0</mu1><mu2>2.0</mu2>
+    <sensor name="right_grip_contact" type="contact">
+      <always_on>true</always_on><update_rate>1000</update_rate>
+      <contact><collision>right_finger_collision</collision></contact>
+    </sensor>
+  </gazebo>
   <joint name="gripper_to_tip" type="fixed"><parent link="gripper_body"/><child link="tool_tip"/><origin xyz="0.12 0 0"/></joint>
   <gazebo>
     <plugin filename="libworkcell_gripper.so" name="workcell::Gripper"/>
